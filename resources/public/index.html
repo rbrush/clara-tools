@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clara Tools</title>
+</head>
+
+
+
+<body>
+<style>
+
+html, body { margin:0; padding:0; overflow:hidden }
+svg { overflow: hidden; position:fixed; top:0; left:0; height:100%; width:100% }
+
+.node rect {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: #ccffff;
+}
+
+.edgeLabel rect {
+    fill: #fff;
+}
+
+.edgePath {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: none;
+}
+</style>
+
+    <h1>Clara Tools</h1>
+
+    <svg>
+      <g transform="translate(20,20)"/>
+    </svg>
+
+    <script src="js/d3.v3.min.js"></script>
+    <script src="js/dagre-d3.js"></script>
+    <script src="js/clara-tools.js"></script>
+</body>
+</html>
