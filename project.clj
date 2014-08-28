@@ -1,13 +1,18 @@
 (defproject org.toomuchcode/clara-tools "0.1.0-SNAPSHOT"
-  :plugins [[lein-cljsbuild "1.0.1"]]
+  :plugins [[lein-cljsbuild "1.0.3"]]
   :hooks [leiningen.cljsbuild]
 
-  :dependencies [[org.clojure/clojurescript "0.0-2156"]
+  :dependencies [[org.clojure/clojurescript "0.0-2202"]
                  [ring/ring-jetty-adapter "1.2.1"]
                  [compojure "1.1.6"]
-                 [org.toomuchcode/clara-rules "0.6.0"]
+                 [org.toomuchcode/clara-rules "0.6.1"]
                  [cljs-ajax "0.2.6"]
                  [hiccup "1.0.4"]
+                 [bootstrap-cljs "0.0.2"]
+                 [om "0.7.1"]
+                 [prismatic/om-tools "0.3.2"]
+                 [secretary "1.2.0"]
+                 [reagent "0.4.2"]
                  [prismatic/schema "0.2.4"]]
 
   :source-paths ["src/main/clojure"]

@@ -2,6 +2,7 @@
   (:require [clara.tools.logic-graph :refer :all]
             [clojure.test :refer :all]
             [clara.rules.accumulators :as acc]
+            [clara.tools.ui :as ui]
             [clara.rules :refer :all]))
 
 (defrecord Order [year month day])
@@ -74,6 +75,7 @@
   [?promotion <- Promotion])
 
 (deftest test-logic-graph
+  "All edges in the graph should have a node."
   (let [{:keys [ nodes edges]} (logic-graph ['clara.tools.test-logic-graph])]
 
     (doseq [[[from to] value] edges]

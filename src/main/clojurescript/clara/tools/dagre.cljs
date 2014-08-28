@@ -1,4 +1,4 @@
-(ns clara.tools.graphing.core
+(ns clara.tools.dagre
   "Dagre-based graphing to support Clara tools."
   (:require [schema.core :as s])
   (:require-macros [schema.macros :as sm]))
@@ -38,11 +38,15 @@
 (defn mk-graph
   "Returns a mutable Dagre-based graph bound to the given DOM selection."
   ([selection] (mk-graph selection {:nodes {} :edges {}}))
-  ([selection graph-data]
+  ([selection graph-data] (mk-graph selection graph-data {}))
+
+  ([selection {:keys [nodes edges] :as graph-data} {:keys [on-node-click
+                                                           on-context-menu
+                                                           context-menu-id] :as options}]
      (let [digraph (update-dagre! (js/dagreD3.Digraph.) graph-data)
 
            layout (-> (js/dagreD3.layout)
-                      (.rankDir "LR"))
+                      (.rankDir "TB"))
 
            renderer (-> (js/dagreD3.Renderer.)
                         (.layout layout))
@@ -50,16 +54,42 @@
            default-draw-nodes (.drawNodes renderer)]
 
        ;; Replace draw nodes function with one that adds CSS class information.
-       (.drawNodes renderer
-                   (fn [graph root]
-                     (let [svg-nodes (default-draw-nodes graph root)]
-                       (.each svg-nodes (fn [u] (this-as this
-                                                        (.classed
-                                                         (js/d3.select this)
-                                                         (.-nodeclass
-                                                          (.node graph u))
-                                                         true))))
-                       svg-nodes)))
+       (.drawNodes
+        renderer
+        (fn [graph root]
+          (let [svg-nodes (default-draw-nodes graph root)]
+            (.each svg-nodes
+                   (fn [u]
+                     (this-as this
+                              (let [item (js/d3.select this)]
+
+                                (when on-node-click
+                                  (.on item  "click" on-node-click))
+
+
+                                (.on item "contextmenu"
+                                     (fn [node-key]
+                                       (js/d3.event.preventDefault)
+                                       (when on-context-menu
+
+                                         (on-context-menu {:node-key node-key
+                                                           :x (.-clientX  d3.event)
+                                                           :y (.-clientY d3.event)})
+
+                                         (comment (-> (js/d3.select (str "#" context-menu-id))
+                                                      (.style "position" "absolute")
+                                                      (.style "left" (str (.-clientX  d3.event) "px"))
+                                                      (.style "top" (str (.-clientY d3.event) "px"))
+                                                      (.style "display" "inline-block")
+                                                      (.on "mouseleave" (fn [] (-> (js/d3.select (str "#" context-menu-id))
+                                                                                  (.style "display" "none")))))))))
+
+                                (.classed
+                                 item
+                                 (.-nodeclass
+                                  (.node graph u))
+                                 true)))))
+            svg-nodes)))
 
 
        (->DagreGraph (js/d3.select selection)
@@ -72,4 +102,7 @@
   "Renders the graph at DOM node identified by the given selection."
   [graph]
   (let [{:keys [node digraph renderer]} graph]
-    (.run renderer digraph node)))
+    (.run renderer digraph node))
+
+
+  )
