@@ -15,6 +15,35 @@
 ;; The context menu for the selected node...
 (def context-details (atom nil))
 
+;; The source code to be displayed in a modal.
+(def source-modal-display (atom nil))
+
+(defn modal
+  "Returns a component representing a model."
+  [{:keys [title content footer close-fn]}]
+  [:div
+   [:div.modal-backdrop.fade.in]
+   [:div.modal.fade.in {:tabIndex "-1" :role "dialog" :style {:display "block"} :on-click close-fn}
+    [:div.modal-dialog
+     [:div.modal-content
+      [:div.modal-header
+       [:h4.modal-title title]]
+      content
+      [:div.modal-footer
+       footer
+       [:div.btn.btn-default {:type "button"
+                              :on-click close-fn}
+        "Close"]]]]]])
+
+(defn source-modal []
+  (when-let [{:keys [symbol source-code] :as source } @source-modal-display]
+    (.log js/console source-code)
+    (modal {:title symbol
+            :content [:pre (str source-code)
+                      ]
+            :footer nil
+            :close-fn #(reset! source-modal-display nil)})))
+
 (defn ruleset-list []
   (let [rulesets @rulesets]
     [:div.panel.panel-default
@@ -53,27 +82,36 @@
         :error-handler #(js/alert (str "Error getting logic graph:" %))}))
 
 
+(defn show-source [symbol]
+  (GET (str "/source/" (js/encodeURIComponent symbol))
+       {:handler (fn [source]
+                   (reset! source-modal-display {:symbol symbol :source-code source}))
+
+        :response-format "text/plain"
+
+        :error-handler #(js/alert (str "Error getting logic graph:" %))}))
+
 (defmulti context-menu-content :type)
 
 (defmethod context-menu-content :fact [node]
-     [:div.btn-group.btn-group-vertical
-      [:button.btn.btn-default
-       {:type "button"
-        :on-click #(js/alert "Not implemented yet!")}
-       "Show source"
+  [:div.btn-group.btn-group-vertical
+   [:button.btn.btn-default
+    {:type "button"
+     :on-click (fn []
+                 (show-source (:symbol  node)))}
+    "Show source"]
 
-       ]
-      [:button.btn.btn-default
-       {:type "button"
-        :on-click #(swap! graph/focused-facts conj {:name (:value node) :enabled true})}
-       "Add to focus"]]
-     )
+   [:button.btn.btn-default
+    {:type "button"
+     :on-click #(swap! graph/focused-facts conj {:name (:value node) :enabled true})}
+    "Add to focus"]])
 
 (defmethod context-menu-content :default [node]
   [:div.btn-group.btn-group-vertical
    [:button.btn.btn-default
     {:type "button"
-     :on-click #(js/alert "Not implemented yet!")}
+     :on-click (fn []
+                 (show-source (:symbol  node)))}
     "Show source"]])
 
 (defn context-menu []
@@ -89,6 +127,7 @@
 (defn logicview-app []
   [:div
    [context-menu]
+   [source-modal]
    [:div.container-fluid
 
     [:div.row

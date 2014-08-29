@@ -69,30 +69,43 @@
   [fact-type]
   (str "FT-" (fact-to-value fact-type)))
 
+(defn- fact-to-symbol
+  "Returns a qualified symbol representing the given fact."
+  [fact-type]
+  (let [parts (-> fact-type
+                  (fact-to-value)
+                  (string/replace #"_" "-")
+                  (string/split #"\."))]
+
+    ;; Create the ->Record symbol so we can resolve the type.
+    (str (string/join "." (drop-last parts)) "/->" (last parts))))
+
 
 (defmulti condition-graph
   "Creates a sub graph for the given condition."
-  (fn [condition condition-to-id] (cs/condition-type condition)))
+  (fn [condition production-symbol condition-to-id] (cs/condition-type condition)))
 
 (defmethod condition-graph :fact
-  [condition condition-to-id]
+  [condition production-symbol condition-to-id]
   (let [condition-id (condition-to-id condition)
         fact-id (fact-to-id (:type condition))]
 
     {:nodes {condition-id
              {:type :fact-condition
-              :value condition}
+              :value condition
+              :symbol production-symbol}
 
              fact-id
              {:type :fact
-              :value (fact-to-value (:type condition))}}
+              :value (fact-to-value (:type condition))
+              :symbol (fact-to-symbol (:type condition))}}
 
 
      :edges {[fact-id condition-id]
              {:type :used-in}}}))
 
 (defmethod condition-graph :accumulator
-  [condition condition-to-id]
+  [condition production-symbol condition-to-id]
 
   (let [condition-id (condition-to-id condition)]
 
@@ -104,12 +117,13 @@
      :edges {}}))
 
 (defn- bool-condition-graph
-  [[condition-type & children :as condition] condition-to-id]
+  [[condition-type & children :as condition] production-symbol condition-to-id]
   (let [condition-id (condition-to-id condition)]
 
     {:nodes {condition-id
              {:type condition-type
-              :value condition}}
+              :value condition
+              :symbol production-symbol}}
 
      :edges (into {}
                   (for [child children]
@@ -118,16 +132,16 @@
                      {:type :component-of}]))}))
 
 (defmethod condition-graph :and
-  [condition condition-to-id]
-  (bool-condition-graph condition condition-to-id))
+  [condition production-symbol condition-to-id]
+  (bool-condition-graph condition production-symbol condition-to-id))
 
 (defmethod condition-graph :or
-  [condition condition-to-id]
-  (bool-condition-graph condition condition-to-id))
+  [condition production-symbol condition-to-id]
+  (bool-condition-graph condition production-symbol condition-to-id))
 
 (defmethod condition-graph :not
-  [condition condition-to-id]
-  (bool-condition-graph condition condition-to-id))
+  [condition production-symbol condition-to-id]
+  (bool-condition-graph condition production-symbol condition-to-id))
 
 
 (defn- get-insertions
@@ -164,13 +178,15 @@
            ;; its conditions and emitted items.
            {:nodes (into {prod-node-id {:type :production
                                         :value (assoc production
-                                                 :meta (meta production))}}
+                                                 :meta (meta production))
+                                        :symbol (:name production)}}
 
                          ;; Add nodes for all inserted facts.
                          (for [insertion insertions]
                            [(fact-to-id insertion)
                             {:type :fact
-                             :value (fact-to-value insertion)}]))
+                             :value (fact-to-value insertion)
+                             :symbol (fact-to-symbol insertion)}]))
 
             ;; Create an edge to the first condition in the seq, which
             ;; is either a simple condition or the parent expression.
@@ -183,7 +199,7 @@
                             {:type :inserts}]))}
 
            (for [condition conditions]
-             (condition-graph condition condition-to-id)))))
+             (condition-graph condition (:name production) condition-to-id)))))
 
 
 

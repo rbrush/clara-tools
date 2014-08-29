@@ -36,6 +36,10 @@
   [node]
   {:label "ANY OF"})
 
+(defmethod display-node :not
+  [node]
+  {:label "NOT"})
+
 (defmethod display-node :default
   [node]
   {:label (str (:type node))})

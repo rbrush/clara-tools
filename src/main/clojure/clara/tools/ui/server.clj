@@ -6,7 +6,12 @@
             [compojure.handler :as handler]
             [clara.tools.ui.logic :as logic]
             [ring.adapter.jetty :as ring]
-            [hiccup.page :as page]))
+            [hiccup.page :as page]
+            [clojure.java.io :as io])
+  (:import [clojure.lang RT]
+           [java.io LineNumberReader InputStreamReader PushbackReader])
+
+  )
 
 ;  svg { overflow: hidden; position:fixed; top:0; left:0; height:100%; width:100% }
 
@@ -56,10 +61,37 @@ html, body { margin:0; padding:0; overflow:hidden }
                  [:script {:src "/js/clara-tools.js"}]]]]))
 
 
+(defn source-for-sym
+  "Customized version of Clojure's source function that handles
+   items not on the classpath."
+  [x]
+  (when-let [v (resolve x)]
+    (when-let [filepath (:file (meta v))]
+      (when-let [strm (or (.getResourceAsStream (RT/baseLoader) filepath)
+                          (io/input-stream filepath)
+                          )]
+        (with-open [rdr (LineNumberReader. (InputStreamReader. strm))]
+          (dotimes [_ (dec (:line (meta v)))] (.readLine rdr))
+          (let [text (StringBuilder.)
+                pbr (proxy [PushbackReader] [rdr]
+                      (read [] (let [i (proxy-super read)]
+                                 (.append text (char i))
+                                 i)))]
+            (read (PushbackReader. pbr))
+            (str text)))))))
+
+
 
 (defroutes routes
   (route/resources "/")
   (GET "/" [] main-page )
+  (GET "/source/:source" [source]
+       (if-let [source (source-for-sym (symbol source))]
+         {:status 200
+          :headers {"Content-Type" "text/plain"}
+          :body source}
+         {:status 404
+          :body (str "Unable to load source for " source)}))
 
   (context "/logic" []
            logic/routes))
