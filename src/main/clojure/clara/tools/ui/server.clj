@@ -5,13 +5,12 @@
             [compojure.route :as route]
             [compojure.handler :as handler]
             [clara.tools.ui.logic :as logic]
+            [clara.tools.ui.session :as session]
             [ring.adapter.jetty :as ring]
             [hiccup.page :as page]
             [clojure.java.io :as io])
   (:import [clojure.lang RT]
-           [java.io LineNumberReader InputStreamReader PushbackReader])
-
-  )
+           [java.io LineNumberReader InputStreamReader PushbackReader]))
 
 ;  svg { overflow: hidden; position:fixed; top:0; left:0; height:100%; width:100% }
 
@@ -94,7 +93,10 @@ html, body { margin:0; padding:0; overflow:hidden }
           :body (str "Unable to load source for " source)}))
 
   (context "/logic" []
-           logic/routes))
+           logic/routes)
+
+  (context "/session" []
+           session/routes))
 
 ;; Support for query paramters, session state, etc.
 (def app (handler/site routes))
