@@ -9,19 +9,30 @@
 
   (:require-macros [schema.macros :as sm]))
 
+
+;; Constant defining an empty graph.
+(def empty-graph {:nodes {} :edges {}})
+
+;; Session information.
 (def clara-session (atom {}))
 
-(def explain-graph (atom nil))
+;; The graph to display.
+(def explain-graph (atom empty-graph))
 
 (defn- explain-fact
-  [fact-id]
-  (GET (str "/session/" (:id @clara-session) "/fact/" fact-id "/explanation")
-       {:handler (fn [graph]
-                   (reset! explain-graph graph))
+  "Appnd or replace the explanation window with an explanation of this fact."
+  ([fact-id] (explain-fact fact-id false))
+  ([fact-id append]
+     (GET (str "/session/" (:id @clara-session) "/fact/" fact-id "/explanation")
+          {:handler (fn [graph]
+                      (let [merged-graph (if append
+                                           (merge-with conj @explain-graph graph)
+                                           graph)]
+                        (reset! explain-graph merged-graph)))
 
-        :response-format "application/edn"
+           :response-format "application/edn"
 
-        :error-handler #(js/alert (str "Error retrieving explanation:" %))}))
+           :error-handler #(js/alert (str "Error retrieving explanation:" %))})))
 
 (defn fact-list []
   [:div.panel.panel-default
@@ -30,6 +41,33 @@
     (for [[id fact] (:facts @clara-session)]
       [:li.list-group-item {:on-click #(explain-fact id)}
        fact])]])
+
+(defmulti display-node :type)
+
+(defmethod display-node :condition
+  [node]
+  {:label (str (get-in node [:value :constraints]))})
+
+(defmethod display-node :default
+  [node]
+  {:label (str (:value node))})
+
+(defn- session-to-display-graph
+  "Converts a graph of session data to a displayable form."
+  [{:keys [nodes edges] :as session-graph}]
+  {:nodes (into {}
+                (for [[node-id node]  nodes]
+                  [node-id (display-node node)]))
+   :edges (into {}
+                (for [[edge-tuple edge] edges]
+                  [edge-tuple {:label (name (:type edge))}]))})
+
+(defn- handle-node-click [id]
+
+  ;; If the user clicks on a fact, append the explanation
+  ;; of that fact to the graph.
+  (when (get-in @clara-session [:facts id])
+    (explain-fact id true)))
 
 (defn- explanation-info-setup []
   (deref explain-graph)
@@ -43,21 +81,11 @@
 
      [:g {:transform "translate(20,20)"}]]]])
 
-(defn- session-to-display-graph
-  "Converts a graph of session data to a displayable form."
-  [{:keys [nodes edges] :as session-graph}]
-  {:nodes (into {}
-                (for [[node-id node]  nodes]
-                  [node-id {:label (str (:value node))}]))
-   :edges (into {}
-                (for [[edge-tuple edge] edges]
-                  [edge-tuple {:label (name (:type edge))}]))})
-
-(defn render-explanation-graph [on-context-menu]
+(defn render-explanation-graph []
   (let [do-render! #(let [display-graph (session-to-display-graph @explain-graph)
                           dagre-graph (dagre/mk-graph "#d3-node svg g"
                                                       display-graph
-                                                      {:on-node-click nil
+                                                      {:on-node-click handle-node-click
                                                        :on-context-menu nil})]
                       (dagre/render! dagre-graph))]
 

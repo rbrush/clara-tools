@@ -35,7 +35,7 @@
             ;; Link last condition to the target fact.
             :edges (into (if (empty? conditions)
                            {}
-                           {[(cond-to-id (last conditions)) fact-id] {:type :yields}})
+                           {[(cond-to-id (last conditions)) fact-id] {:type :asserts}})
 
                          ;; Create edges between successive conditions.
                          (map (fn [cond next-cond]
