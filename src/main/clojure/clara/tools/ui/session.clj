@@ -70,7 +70,7 @@
                          [id (pr-str fact)]))
 
      :id-to-explanation (into {}
-                              (for [[fact explanation] (fact-to-explanation-map inspection)]
+                              (for [[fact explanation] fact-to-explanation]
                                 [(fact-to-id fact) explanation]))}))
 
 (defn explanation-graph
