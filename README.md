@@ -2,7 +2,7 @@
 
 Experimental tooling for exploring and working with Clara-based rulesets.
 
-See the [clara-rules project](https://github.com/rbrush/clara-rules) for detailson Clara.
+See the [clara-rules project](https://github.com/rbrush/clara-rules) for details on Clara.
 
 ## License
 
