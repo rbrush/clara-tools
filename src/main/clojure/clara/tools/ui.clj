@@ -21,6 +21,7 @@
 (defn show-session
   "Opens a browser window to inspect the content of the given session."
   [session]
+  {:pre [(satisfies? clara.rules.engine/ISession session)]}
   (server/start-server!)
   (let [session-id (session/register! session)]
     (browse/browse-url (str "http://localhost:8080/#/session?clara-session=" session-id))))
