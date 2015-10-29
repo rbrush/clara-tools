@@ -45,14 +45,24 @@
 
            ;; Create fact and conditions nodes and edges between them.
            (for [[fact condition] (:matches explanation)]
-             {:nodes {(fact-to-id fact) {:type :fact
-                                         :value (pr-str fact)}
 
-                      (cond-to-id condition) {:type :condition
-                                              :value condition}}
+             ;; Accumulated values will not have a fact id, so
+             ;; generate one with a hash so it will be connected into the graph.
+             {:nodes {(fact-to-id fact (str (hash fact))) {:type :fact
+                                                           :value (pr-str fact)}
 
-              :edges {[(fact-to-id fact) (cond-to-id condition)] {:type :matches
-                                                                  :value condition} }
+                      ;; Simply include the accumulator node in the display.
+                      (cond-to-id condition) (if (fact-to-id fact)
+                                               {:type :condition
+                                                :value condition}
+                                               {:type :accumulator
+                                                :value condition})}
+
+              :edges {[(fact-to-id fact (str (hash fact))) (cond-to-id condition)]
+                      ;; Use an accumulated edge label for generated
+                      ;; fact ids.
+                      {:type (if (fact-to-id fact) :matches :accumulated)
+                       :value condition} }
               } ))))
 
 (defn to-session-info

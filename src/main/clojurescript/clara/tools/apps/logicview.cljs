@@ -5,7 +5,7 @@
             [schema.core :as s]
             [reagent.core :as reagent :refer [atom]]
             [clara.tools.apps.logicview.graph :as graph]
-            [secretary.core :as secretary :include-macros true :refer [defroute]])
+            [secretary.core :as secretary :refer-macros [defroute]])
 
   (:require-macros [schema.macros :as sm]))
 
@@ -78,6 +78,8 @@
                               :enabled true}))
 
                    (reset! graph/logic-graph graph-data))
+
+        :response-format "application/edn"
 
         :error-handler #(js/alert (str "Error getting logic graph:" %))}))
 

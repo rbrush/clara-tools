@@ -5,7 +5,7 @@
             [schema.core :as s]
             [reagent.core :as reagent :refer [atom]]
             [clara.tools.dagre :as dagre]
-            [secretary.core :as secretary :include-macros true :refer [defroute]])
+            [secretary.core :as secretary :refer-macros [defroute]])
 
   (:require-macros [schema.macros :as sm]))
 
@@ -47,6 +47,12 @@
 (defmethod display-node :condition
   [node]
   {:label (str (get-in node [:value :constraints]))})
+
+(defmethod display-node :accumulator
+  [node]
+  (let [condition (:value node)
+        {accum :accumulator {constraints :constraints fact-type :type} :from} condition]
+    {:label (str "Accumulate " accum " from " fact-type " when " constraints)}))
 
 (defmethod display-node :default
   [node]

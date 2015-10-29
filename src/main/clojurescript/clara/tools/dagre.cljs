@@ -1,10 +1,9 @@
 (ns clara.tools.dagre
   "Dagre-based graphing to support Clara tools."
-  (:require [schema.core :as s])
-  (:require-macros [schema.macros :as sm]))
+  (:require [schema.core :as s :refer-macros [defschema]]))
 
-(sm/defschema graph-schema {:nodes ; Nodes are a map of Node IDs to their metadata.
-                            {s/Any ; Node ID.
+(defschema graph-schema {:nodes ; Nodes are a map of Node IDs to their metadata.
+                          {s/Any ; Node ID.
                              {(s/optional-key :label) s/Str ; Node label.
                               (s/optional-key :class) s/Str} ; Space-separated string that can be used as DOM classes.
                              }
