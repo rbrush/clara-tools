@@ -14,7 +14,7 @@
   :source-paths ["src/main/clojure"]
   :test-paths ["src/test/clojure"]
   :java-source-paths ["src/main/java"]
-
+  :lein-release {:deploy-via :clojars}
   :plugins [[lein-cljsbuild "1.1.0"]]
   :hooks [leiningen.cljsbuild]
 
@@ -26,7 +26,7 @@
                            :pretty-print true}}]}
 
   :scm {:name "git"
-        :url "https://github.com/rbrush/clara-tools.git"}
+        :url "https://github.com/rbrush/clara-tools"}
 
   :pom-addition [:developers [:developer
                               [:id "rbrush"]

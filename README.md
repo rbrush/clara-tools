@@ -6,6 +6,6 @@ See the [clara-rules project](https://github.com/rbrush/clara-rules) for details
 
 ## License
 
-Copyright © 2014 Ryan Brush
+Copyright © 2015 Ryan Brush
 
 Distributed under the Eclipse Public License, the same as Clojure.
