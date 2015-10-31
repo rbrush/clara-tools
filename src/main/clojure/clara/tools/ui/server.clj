@@ -37,7 +37,7 @@ html, body { margin:0; padding:0; overflow:hidden }
 }
 ")
 
-(def version "0.1.0-SNAPSHOT")
+(def version "0.1.1")
 
 (def main-page
   (page/html5 [:head
