@@ -1,8 +1,12 @@
-(ns clara.tools.logic-graph
-  (:require [schema.core :as s]
-            [clojure.string :as string]
+(ns clara.tools.impl.logic
+  "Queries to support the exploration of rule logic."
+  (:require [clojure.string :as string]
+            [clara.tools.queries :as q]
             [clara.rules.schema :as cs]
-            [clara.rules.compiler :as com]))
+            [schema.core :as s]
+            [clara.rules.compiler :as com]
+            [clara.tools.impl.watcher :as w]))
+
 
 (def ^:private operators #{:and :or :not})
 
@@ -286,3 +290,17 @@
                           (re-find facts-regex value))
                subgraph [(connects-to graph node-key) (reachable-from graph node-key)]]
            subgraph)))
+
+
+(defmethod q/run-query :logic-graph
+  [[_ session-id :as query] key channel]
+  (letfn [(list-session-facts [sessions]
+            (if-let [session (get-in sessions [session-id :session])]
+              (q/send-response! channel
+                                key
+                                (logic-graph (w/sources session)))
+
+              (q/send-failure! channel key {:type :unknown-session})))]
+
+    (list-session-facts @w/sessions)
+    (w/watch-sessions query list-session-facts)))
