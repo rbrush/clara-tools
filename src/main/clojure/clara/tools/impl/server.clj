@@ -8,7 +8,8 @@
             [hiccup.page :as page]
             [clara.tools.queries :as q]
             [clara.tools.impl.facts :as facts]
-            [clara.tools.impl.logic :as logic])
+            [clara.tools.impl.logic :as logic]
+            [clojure.edn :as edn])
 
   (:import [org.httpkit.server AsyncChannel]))
 
@@ -37,7 +38,7 @@
 (def running-queries (atom {}))
 
 (defn- handle-request [channel request-string]
-  (let [{:keys [type key request] :as message} (clojure.edn/read-string request-string)]
+  (let [{:keys [type key request] :as message} (edn/read-string request-string)]
     (if (not (and type key request))
       (println "INVALID MESSAGE:" (pr-str message))
       (case type
