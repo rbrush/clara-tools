@@ -15,9 +15,11 @@
 
   (when (.-data message)
     (let [{:keys [query key response error] :as message} (reader/read-string (.-data message))]
-      (.log js/console (str "Got response:" (pr-str message)))
+
       (if error
-        (js/alert (str "Error from server" error))
+
+        ;; TODO: display error message in a non-obtrusive way.
+        (.log js/console (str "Error from server" error))
 
         (if-let [on-success (get-in @query-handlers [key :on-success])]
 

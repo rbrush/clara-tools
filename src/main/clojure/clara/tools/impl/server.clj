@@ -74,5 +74,8 @@
 (defn stop-server!
   []
   (when @server
-    (@server :timeout 100)
+    (try
+      (@server :timeout 100)
+      (catch java.util.concurrent.RejectedExecutionException e
+        ))
     (reset! server nil)))

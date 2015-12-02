@@ -163,11 +163,8 @@
 
 
 (defn show-logic [logic-graph-param]
-  ;;  [:p (str @logic-graph)]
   (reset! logic-graph @logic-graph-param)
-  ;;  [render-logic-graph (fn [] (js/alert "FOCUS!"))]
-  [logicview-app]
-  )
+  [logicview-app])
 
 (defn logic-view [view-state]
   (let [logic-graph (atom nil)]

@@ -1,4 +1,4 @@
-(defproject org.toomuchcode/clara-tools "0.1.2-SNAPSHOT"
+(defproject org.toomuchcode/clara-tools "0.2.0-SNAPSHOT"
 
   :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/clojurescript "1.7.145"]
@@ -11,7 +11,7 @@
                  [reagent "0.5.1"]
                  [org.clojure/core.cache "0.6.4"]
                  [cljsjs/react-bootstrap "0.25.1-0"]
-                 [http-kit "2.1.18"]
+                 [http-kit "2.1.19"]
                  [com.cognitect/transit-cljs "0.8.232"]
                  [com.cognitect/transit-clj "0.8.285"]
                  [ring/ring-core "1.4.0"]
@@ -20,6 +20,7 @@
                  [prismatic/schema "1.0.3"]
                  [figwheel-sidecar "0.4.0"]]
 
+  :resource-paths ["resources" "target/resources"]
   :source-paths ["src/main/clojure"]
   :test-paths ["src/test/clojure"]
   :java-source-paths ["src/main/java"]
@@ -37,7 +38,9 @@
                 :externs ["externs.js"]
                 :compiler {
                            :main clara.tools.client.main
-                           :output-to "resources/public/js/clara-tools.js"
+                           :asset-path "/js"
+;;                           :output-to "raesources/public/js/clara-tools.js"
+                           :output-dir "target/resources/public/js"
                            :optimizations :none
                            :pretty-print true}}]}
 

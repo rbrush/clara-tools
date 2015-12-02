@@ -1,4 +1,4 @@
-(ns clara.tools.util
+(ns clara.tools.impl.file-watcher
   "Utility functions for working with Clara."
   (require [clara.rules :refer :all]))
 
@@ -34,7 +34,7 @@
           (recur
            (try
 
-             (Thread/sleep 50)
+             (Thread/sleep 20)
              (doseq [^java.nio.file.WatchKey watchkey watchkeys
                      update (.pollEvents watchkey)
 

@@ -11,13 +11,13 @@
   [name & args]
   {:pre [(string? name)]}
   (let [sources (vec (take-while #(not (keyword? %)) args))]
-    `(let [raw-session# (r/mk-session ~@args)]
-       (w/to-watched ~name raw-session# ~sources))))
+    `(let [mk-session-fn# (fn [] (r/mk-session ~@args))]
+       (w/to-watched ~name mk-session-fn# ~sources))))
 
 (defn cancel-watch!
   "Cancel the given watched session."
   [watched-session]
-  (w/unregister! (w/session-id watched-session)))
+  (.close watched-session))
 
 (defn clear-watches!
   "Clear all watched sessions."

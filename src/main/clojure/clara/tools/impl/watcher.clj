@@ -5,6 +5,8 @@
             [clara.rules.listener :as l]
             [clara.tools.inspect :as inspect]
             [clara.tools.queries :as q]
+            [clojure.pprint :as pprint]
+            [clara.tools.impl.file-watcher :as fw]
             [schema.core :as s]))
 
 (def sessions (atom {}))
@@ -17,36 +19,17 @@
 (defn watch-sessions
   "Adds a watch to the session and returns a function
    that will cancel the watch when invoked."
-  [query handler]
+  [key handler]
   (add-watch sessions
-             query
+             key
              (fn [key sessions old new]
                (handler new)))
   cancel-session-watch)
 
-(defn register!
-  "Registers a session with the given name and returns a key used to update or unregister it."
-  [session-name session]
-  (let [session-id (.toString (java.util.UUID/randomUUID))]
-    (swap! sessions assoc session-id {:name session-name
-                                      :session session})
-    session-id))
-
-(defn update!
+(defn- update!
   "Updates the state of a registered session."
   [session-id session]
   (swap! sessions (fn [sessions] (assoc-in sessions [session-id :session] session)) ))
-
-(defn unregister!
-  "Unregister a session."
-  [session-id]
-  (swap! sessions dissoc session-id))
-
-(defn clear!
-  "Remove all outstanding watches."
-  []
-  ;; Remove all watches...
-  (reset! sessions {}))
 
 
 ;; Function that will cancel the given query when called.
@@ -97,7 +80,7 @@
                          (remove empty? (clojure.string/split filter #" ")))]
     (into []
           (for [datum data
-                :let [datum-string (with-out-str (clojure.pprint/pprint datum))]
+                :let [datum-string (with-out-str (pprint/pprint datum))]
                 :when (or (empty? filter-strings)
                           (every? #(.contains ^String datum-string %) filter-strings))]
 
@@ -147,10 +130,12 @@
     (swap! facts concat new-facts))
 
   (retract-facts! [listener retracted-facts]
-    (reset! facts (mem/remove-first-of-each retracted-facts @facts)))
+    (let [[removed updated-facts] (mem/remove-first-of-each retracted-facts @facts)]
+      (reset! facts updated-facts)))
 
   (retract-facts-logical! [listener node token retracted-facts]
-    (reset! facts (mem/remove-first-of-each retracted-facts @facts)))
+    (let [[removed updated-facts] (mem/remove-first-of-each retracted-facts @facts)]
+      (reset! facts updated-facts)))
 
   (add-accum-reduced! [listener node join-bindings result fact-bindings])
 
@@ -166,15 +151,29 @@
 (defn- to-watch-listener [^PersistentWatchListener listener]
   (WatchListener. (atom (.-facts listener))))
 
+(defn- add-watch-listener
+  "Adds the listener to watch the underlying session changes."
+  [session]
+  (let [{:keys [listeners] :as components} (eng/components session)]
+    (eng/assemble (assoc components
+                         :listeners
+                         (conj listeners (PersistentWatchListener. []))))))
+
 (declare watched-session)
 
 (defprotocol IWatchedSession
   (session-id [session])
   (sources [session])
   (facts [session])
-  (raw-session [session]))
+  (raw-session [session])
+  (reload-rules! [session])
+  (close [session]))
 
-(deftype WatchedSession [session-id delegate sources]
+(deftype WatchedSession [session-id ; Unique identifier for the session.
+                         ^:volatile-mutable delegate ; Underlying session to delegate to. Mutable to support reloading rules.
+                         change-log ; A sequence of updates to the session in the form of insert, retract, fire-rules operations.
+                         sources ; Sources used to create the session
+                         session-load-fn] ; Function to re-load the session.
 
   IWatchedSession
   (session-id [session] session-id)
@@ -191,26 +190,61 @@
 
   (raw-session [session] delegate)
 
+  (reload-rules! [session]
+    ;; Apply the change log to the newly loaded session.
+    (let [raw-session-with-facts
+          (loop [[change & rest] change-log
+                 applied-session (add-watch-listener (session-load-fn))]
+
+            (if change
+
+              (case (:type change)
+
+                :insert
+                (recur (eng/insert applied-session (:facts change)) rest)
+
+                :retract
+                (recur (eng/retract applied-session (:facts change)) rest)
+
+                :fire-rules
+                (recur rest (eng/fire-rules applied-session)))
+              applied-session))]
+
+      ;; Replace the delegate session with the reloaded version.
+      (set! delegate raw-session-with-facts)))
+
+  (close [session]
+    (let [reload-future (get-in @sessions [session-id :reload-future])]
+      (when reload-future
+        (future-cancel reload-future))
+      (swap! sessions dissoc session-id)))
+
   eng/ISession
   (insert [session facts]
     (watched-session
      session-id
      (eng/insert delegate facts)
-     sources))
+     (conj change-log {:type :insert :facts facts})
+     sources
+     session-load-fn))
 
   ;; Retracts a fact.
   (retract [session fact]
     (watched-session
      session-id
      (eng/retract delegate fact)
-     sources))
+     (conj change-log {:type :retract :facts facts})
+     sources
+     session-load-fn))
 
   ;; Fires pending rules and returns a new session where they are in a fired state.
   (fire-rules [session]
     (watched-session
      session-id
      (eng/fire-rules delegate)
-     sources))
+     (conj change-log {:type :fire-rules})
+     sources
+     session-load-fn))
 
   ;; Runs a query agains thte session.
   (query [session query params]
@@ -220,24 +254,58 @@
   (components [session]
     (eng/components delegate)))
 
-
 (defn- watched-session
-  [session-id raw-session sources]
-  (let [new-session (WatchedSession. session-id raw-session sources)]
+  [session-id raw-session change-log sources session-load-fn]
+  {:pre [(satisfies? eng/ISession raw-session) (vector? change-log)]}
+  (let [new-session (WatchedSession. session-id raw-session change-log sources session-load-fn)]
     (update! session-id new-session)
     new-session))
 
-(defn- add-watch-listener
-  "Adds the listener to watch the underlying session changes."
-  [session]
-  (let [{:keys [listeners] :as components} (eng/components session)]
-    (eng/assemble (assoc components
-                         :listeners
-                         (conj listeners (PersistentWatchListener. []))))))
+(defn- mk-source-watch-future
+  "Returns a fture that reloads"
+  [session-id sources]
+  (let [source-files (into #{}
+                           (for [source sources
+                                 :when (symbol? source)
+                                 v (-> (find-ns source)
+                                       (ns-publics)
+                                       (vals))
+                                 :let [file-name (:file (meta v))
+                                       qualified-name (if (.startsWith file-name "/")
+                                                        file-name
+                                                        (str (System/getProperty "user.dir")
+                                                             "/"
+                                                             file-name))]
+                                 ;; Check if source is a watchable file
+                                 ;; rather than a JAR resource, for instance.
+                                 :when (.exists (java.io.File. qualified-name))]
+                             qualified-name))]
+
+    (fw/watch-files source-files
+                    (fn [updated-file]
+                      (load-file updated-file)
+                      (when-let [session (get-in @sessions [session-id :session])]
+                        (reload-rules! session))))))
 
 (defn to-watched
   "Creates a watched session from the given raw session."
-  [name raw-session sources]
-  (let [session-id  (register! name raw-session)
-        raw-with-listener (add-watch-listener raw-session)]
-    (watched-session session-id raw-with-listener sources)))
+  [session-name ; Session name for display purposes
+   session-load-fn ; Function used to load the session.
+   sources] ; Rule sources for logic inspection.
+  (let [raw-session (session-load-fn)
+        session-id  (.toString (java.util.UUID/randomUUID))
+        source-watch-future (mk-source-watch-future session-id sources)
+        raw-with-listener (add-watch-listener raw-session)
+        watched-session (watched-session session-id raw-with-listener [] sources session-load-fn)]
+
+    (swap! sessions assoc session-id {:name session-name
+                                      :session watched-session
+                                      :reload-future source-watch-future})
+
+    watched-session))
+
+(defn clear!
+  "Remove all outstanding watches."
+  []
+  (doseq [session (vals @sessions)]
+    (.close (:session session))))
