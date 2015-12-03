@@ -104,7 +104,7 @@
               (q/send-failure! channel key {:type :unknown-session})))]
 
     (list-session-facts @w/sessions)
-    (w/watch-sessions query list-session-facts)))
+    (w/watch-sessions key list-session-facts)))
 
 ;; Returns a sequence of [fact-id fact] tuples for facts of the given type.
 (defmethod q/run-query :list-facts-by-type
@@ -123,7 +123,7 @@
               (q/send-failure! channel key {:type :unknown-session})))]
 
     (list-session-facts @w/sessions)
-    (w/watch-sessions query list-session-facts)))
+    (w/watch-sessions key list-session-facts)))
 
 (defmethod q/run-query :explain-fact
   [[_ session-id fact-id :as query] key channel]
@@ -136,4 +136,4 @@
               (q/send-failure! channel key {:type :unknown-session})))]
 
     (list-session-facts @w/sessions)
-    (w/watch-sessions query list-session-facts)))
+    (w/watch-sessions key list-session-facts)))

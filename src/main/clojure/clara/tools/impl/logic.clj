@@ -303,4 +303,4 @@
               (q/send-failure! channel key {:type :unknown-session})))]
 
     (list-session-facts @w/sessions)
-    (w/watch-sessions query list-session-facts)))
+    (w/watch-sessions key list-session-facts)))

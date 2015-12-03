@@ -1,44 +1,17 @@
 (ns clara.tools.examples.shopping
   (:require [clara.rules.accumulators :as acc]
             [clara.rules :refer :all]
-            [clara.tools.watch :as w]))
-
-;;;; Facts used in the examples below.
-
-(defrecord Order [year month day])
-
-(defrecord Customer [status])
-
-(defrecord Purchase [cost item])
-
-(defrecord Discount [reason percent])
-
-(defrecord Total [total])
-
-(defrecord Promotion [reason type])
+            [clara.tools.watch :as w]
+            [clara.tools.examples.shopping.records :refer :all])
+  (:import [clara.tools.examples.shopping.records Order Customer
+            Purchase Discount Total Promotion]))
 
 ;;;; Some example rules. ;;;;
 
-(defn my-sum
-  "Returns an accumulator that returns the sum of values of a given field"
-  [start-total field]
-  (acc/accum
-   {:initial-value start-total
-    :reduce-fn (fn [total item]
-                 (+ total (field item)))
-    :retract-fn (fn [total item]
-                  (- total (field item)))
-    :combine-fn +}))
-
 (defrule total-purchases
-  (?total <- (my-sum 1 :cost) :from [Purchase])
+  (?total <- (acc/sum :cost) :from [Purchase])
   =>
   (insert! (->Total ?total)))
-
-(defrule print-total
-  [?t <- Total]
-  =>
-  (println "TOTAL:" ?t))
 
 ;;; Discounts.
 (defrule summer-special
@@ -67,7 +40,7 @@
 (defrule free-widget-month
   "All purchases over $200 in August get a free widget."
   [:and
-   [Order (= :august month)]
+   [Order (= :june month)]
    [Total (> total 200)]]
   =>
   (insert! (->Promotion :free-widget-month :widget)))
@@ -150,7 +123,7 @@
                                 (->Order 2013 :august 20)
                                 (->Purchase 20 :gizmo)
                                 (->Purchase 120 :widget)
-                                (->Purchase 900 :widget)
+                                (->Purchase 90 :widget)
                                 )
                         fire-rules))
 
@@ -186,4 +159,6 @@
   (w/browse!)
 
   (w/shutdown!)
+
+  (w/clear-watches!)
   )

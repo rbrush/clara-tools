@@ -23,6 +23,7 @@
   (add-watch sessions
              key
              (fn [key sessions old new]
+               (println "Watching for " key)
                (handler new)))
   cancel-session-watch)
 
@@ -46,7 +47,7 @@
 
     ;; Run the query and then watch the sessions for changes.
     (session-map @sessions)
-    (watch-sessions query session-map)))
+    (watch-sessions key session-map)))
 
 (s/defn get-queries :- q/session-queries-response
   [session]
@@ -68,7 +69,7 @@
                            (q/send-failure! channel query {:type :unknown-session})))]
 
     (query-sessions @sessions)
-    (watch-sessions query query-sessions)))
+    (watch-sessions key query-sessions)))
 
 
 (defn clean-and-filter
@@ -104,7 +105,7 @@
                            (q/send-failure! channel query {:type :unknown-session})))]
 
     (query-sessions @sessions)
-    (watch-sessions query query-sessions)))
+    (watch-sessions key query-sessions)))
 
 (declare to-watch-listener)
 
@@ -201,17 +202,23 @@
               (case (:type change)
 
                 :insert
-                (recur (eng/insert applied-session (:facts change)) rest)
+                (recur rest (eng/insert applied-session (:facts change)))
 
                 :retract
-                (recur (eng/retract applied-session (:facts change)) rest)
+                (recur rest (eng/retract applied-session (:facts change)))
 
                 :fire-rules
                 (recur rest (eng/fire-rules applied-session)))
+
               applied-session))]
 
       ;; Replace the delegate session with the reloaded version.
-      (set! delegate raw-session-with-facts)))
+      (set! delegate raw-session-with-facts)
+
+      ;; Update the session map so watchers pick up the change.
+      (swap! sessions assoc-in [session-id :session] session)
+
+      session))
 
   (close [session]
     (let [reload-future (get-in @sessions [session-id :reload-future])]
@@ -270,6 +277,9 @@
                                  v (-> (find-ns source)
                                        (ns-publics)
                                        (vals))
+
+                                 :when (:file (meta v))
+
                                  :let [file-name (:file (meta v))
                                        qualified-name (if (.startsWith file-name "/")
                                                         file-name
@@ -307,5 +317,9 @@
 (defn clear!
   "Remove all outstanding watches."
   []
+
+  (doseq [watch-key (keys (.getWatches sessions))]
+    (remove-watch sessions watch-key))
+
   (doseq [session (vals @sessions)]
     (.close (:session session))))

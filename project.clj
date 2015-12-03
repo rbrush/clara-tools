@@ -38,8 +38,8 @@
                 :externs ["externs.js"]
                 :compiler {
                            :main clara.tools.client.main
-                           :asset-path "/js"
-;;                           :output-to "raesources/public/js/clara-tools.js"
+                           :asset-path "/public/js"
+                           :output-to "target/resources/public/js/clara-tools.js"
                            :output-dir "target/resources/public/js"
                            :optimizations :none
                            :pretty-print true}}]}

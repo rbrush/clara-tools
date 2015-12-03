@@ -3,7 +3,8 @@
             [clara.rules :refer :all]
             [clara.tools.watch :as wa]
             [clara.tools.impl.watcher :as wr]
-            [clara.tools.examples.shopping :as shop]))
+            [clara.tools.examples.shopping :as shop]
+            [clara.tools.examples.shopping.records :as rec]))
 
 (deftest test-empty-watch
   (with-open [session (wa/mk-watched-session "Test session" 'clara.tools.examples.shopping :cache false)]
@@ -12,8 +13,8 @@
 
     (is (empty? (wr/facts session)))
 
-    (let [test-facts [(shop/->Purchase 100 :gizmo)
-                      (shop/->Purchase 150 :widget)]
+    (let [test-facts [(rec/->Purchase 100 :gizmo)
+                      (rec/->Purchase 150 :widget)]
           session-with-facts (insert-all session
                                          test-facts)
           session-with-retractions (apply retract session-with-facts test-facts)]

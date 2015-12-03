@@ -15,15 +15,15 @@
 
 (def main-page
   (page/html5 [:head
-               [:link {:href  "/resources/public/css/bootstrap.min.css" :rel "stylesheet" :type "text/css"}]
-               [:link {:href  "/resources/public/css/dagre.css" :rel "stylesheet" :type "text/css"}]
+               [:link {:href  "/public/css/bootstrap.min.css" :rel "stylesheet" :type "text/css"}]
+               [:link {:href  "/public/css/dagre.css" :rel "stylesheet" :type "text/css"}]
                [:title "Clara Tools"]
                [:body
                 [:div {:id "app"}]
                 [:div
-                 [:script {:src "/resources/public/js/d3.js"}]
-                 [:script {:src "/resources/public/js/dagre-d3.js"}]
-                 [:script {:src "/resources/public/js/clara-tools.js"}]]]]))
+                 [:script {:src "/public/js/d3.js"}]
+                 [:script {:src "/public/js/dagre-d3.js"}]
+                 [:script {:src "/public/js/clara-tools.js"}]]]]))
 
 (defonce channels (atom #{}))
 
@@ -56,7 +56,7 @@
     (on-receive channel (fn [request] (handle-request channel request)))))
 
 (defroutes routes
-  (route/resources "/resources/public/")
+  (route/resources "/public/")
   (GET "/" [] main-page )
   (GET "/socket" request (ws-handler request)))
 

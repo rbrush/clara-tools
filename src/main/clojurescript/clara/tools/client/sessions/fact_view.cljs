@@ -105,12 +105,13 @@
                       (fn [results] (reset! explanation-graph results))))
 
     (reagent.ratom/run!
-     (chan/run-query! [:list-facts-by-type (:active-session @view-state)]
-                      [:list-facts-by-type
-                       (:active-session @view-state)
-                       @active-type
-                       {:filter (:search @table-state)}]
-                      (fn [results] (reset! fact-list results))))
+     (when @active-type
+       (chan/run-query! [:list-facts-by-type (:active-session @view-state)]
+                        [:list-facts-by-type
+                         (:active-session @view-state)
+                         @active-type
+                         {:filter (:search @table-state)}]
+                        (fn [results] (reset! fact-list results)))))
 
     (fn [view-state]
 
