@@ -24,7 +24,7 @@
 
 (def tabs {:queries {:key :queries :title "Queries"}
            :facts {:key :facts :title "Facts"}
-           :logic {:key :logic :title "Logic"}})
+           :logic {:key :logic :title "Logic (Experimental)"}})
 
 (defn session-selector []
   (let [sessions (keys @session-map)

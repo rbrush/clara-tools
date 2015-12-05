@@ -8,14 +8,6 @@
 (defn- fact-to-id [fact]
   (str (.getName (type fact)) "-" (hash fact)))
 
-(defn- fact-to-id-map
-  "Takes all facts in the given session inspection and produces a map of id-to-fact"
-  [inspection]
-  (let [facts (-> inspection :condition-matches vals flatten distinct)]
-       (into {}
-             (for [fact facts]
-               [fact (fact-to-id fact)]))))
-
 (defn- cond-to-id [condition]
   (str "COND-" (hash condition)))
 
@@ -69,7 +61,9 @@
 (defn to-session-info
   [session]
   (let [inspection (inspect/inspect session)
-        fact-to-id (fact-to-id-map inspection)
+        fact-to-id (into {}
+                         (for [fact (w/facts session)]
+                           [fact (fact-to-id fact)]))
         fact-to-explanation (for [[node insertions] (-> inspection :insertions)
                                   {:keys [explanation fact]} insertions]
                               [fact explanation])

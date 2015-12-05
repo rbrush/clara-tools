@@ -40,7 +40,7 @@
 (defrule free-widget-month
   "All purchases over $200 in August get a free widget."
   [:and
-   [Order (= :june month)]
+   [Order (= :august month)]
    [Total (> total 200)]]
   =>
   (insert! (->Promotion :free-widget-month :widget)))
@@ -56,6 +56,11 @@
   []
   [?promotion <- Promotion])
 
+(defquery get-promotions-by-type
+  "Query to find promotions by a given type."
+  [:?type]
+  [?promotion <- Promotion (= ?type type)])
+
 ;;;; The section below shows this example in action. ;;;;
 
 (defn print-discounts!
@@ -67,14 +72,6 @@
     (println percent "%" reason "discount"))
 
   session)
-
-(defrule discount-fun
-  [?stuff <- [:or
-            [max-discount :from [Discount]]
-            [max-discount :from [Discount]]]]
-  =>
-  (println ?stuff))
-
 
 
 (defn print-promotions!
@@ -136,6 +133,14 @@
                               (->Order 2013 :august 20)
                               (->Purchase 20 :gizmo)
                               (->Purchase 120 :widget)
+                              (->Person "Alice" "Smith" "Betty" 50
+                                        :female "123 Fake Street" "Lemur" "Missouri" "12345" true )
+                              (->Person "Bob" "Smith" "Betty" 60
+                                        :male "123 Fake Street" "Lemur" "Missouri" "12345" true )
+                              (->Person "Charles" "Smith" "Betty" 70
+                                        :male "123 Fake Street" "Lemur" "Missouri" "12345" true )
+                              (->Person "Donna" "Smith" "Betty" 50
+                                        :male "123 Fake Street" "Monkey" "Kansas" "12345" true )
                               (->Purchase 90 :widget)) ; Insert some facts.
                       (fire-rules)))
 

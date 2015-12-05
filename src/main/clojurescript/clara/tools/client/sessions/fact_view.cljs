@@ -54,16 +54,17 @@
 
   ;; Reference the graph here so we know to re-render the
   ;; component when the graph changes.
-  (deref explanation-graph)
+  (if (= empty-graph @explanation-graph)
+    [:div "Fact was inserted directly so no explanation available."]
 
-  [:div { ; :style {:height "100%" :width "100%"}
-         :react-key "d3-node" ;; ensure React knows this is non-reusable
-         :ref "d3-node"       ;; label it so we can retrieve it via get-node
-         :id "d3-node"}
-   [:svg {:width "100%" :height 300
-          :style {:outline "thin solid #C0C0C0"}}
+    [:div { ; :style {:height "100%" :width "100%"}
+           :react-key "d3-node" ;; ensure React knows this is non-reusable
+           :ref "d3-node"       ;; label it so we can retrieve it via get-node
+           :id "d3-node"}
+     [:svg {:width "100%" :height 300
+            :style {:outline "thin solid #C0C0C0"}}
 
-    [:g {:transform "translate(20,20)"}]]])
+      [:g {:transform "translate(20,20)"}]]]))
 
 (defn render-explanation-graph []
   (let [do-render! (fn [comp argvs]

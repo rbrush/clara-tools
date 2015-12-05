@@ -15,22 +15,20 @@
 
   (let [{:keys [title path search]} @table-state-ref
         columns (get-columns @records-ref path get-record-fn)]
-    (.log js/console (str "Showing Results..." (empty? @records-ref)))
-    [:div
-     [:span title
-      ;; Display a search box if provided by the caller.
-      (when search
-        [b/input {:type "text"
-                  :placeholder "search table"
-                  :value search
-                  :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}])
-      (when (seq path)
-        (into [:span {:bsSize "small"
-                      :onClick (fn [] (swap! table-state-ref assoc :path []))}]
-              (concat
-               (for [path-item path]
-                 [:span " / " (name path-item) " " ])
-               [[b/glyphicon {:glyph "remove"}]])))]
+    [b/panel {:header title}
+
+     (when search
+       [b/input {:type "text"
+                 :placeholder "search table"
+                 :value search
+                 :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}])
+     (when (seq path)
+       (into [:span {:bsSize "small"
+                     :onClick (fn [] (swap! table-state-ref assoc :path []))}]
+             (concat
+              (for [path-item path]
+                [:span " / " (name path-item) " " ])
+              [[b/glyphicon {:glyph "remove"}]])))
 
      (when (seq @records-ref)
        [b/table {:striped true :bordered true}

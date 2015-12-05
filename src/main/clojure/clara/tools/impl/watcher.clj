@@ -78,12 +78,15 @@
   [data filter]
   (let [filter-strings (if (empty? filter)
                          nil
-                         (remove empty? (clojure.string/split filter #" ")))]
+                         (for [filter-string (clojure.string/split filter #" ")
+                               :when (not (empty? filter-string))]
+                           (.toLowerCase ^String filter-string)))]
     (into []
           (for [datum data
-                :let [datum-string (with-out-str (pprint/pprint datum))]
+                :let [datum-string (with-out-str (pprint/pprint datum))
+                      lower-string (.toLowerCase ^String datum-string)]
                 :when (or (empty? filter-strings)
-                          (every? #(.contains ^String datum-string %) filter-strings))]
+                          (every? #(.contains ^String lower-string %) filter-strings))]
 
             (read-string datum-string)))))
 

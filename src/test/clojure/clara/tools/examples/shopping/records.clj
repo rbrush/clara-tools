@@ -12,3 +12,5 @@
 (defrecord Total [total])
 
 (defrecord Promotion [reason type])
+
+(defrecord Person [first last middle age gender street city state zip status])
