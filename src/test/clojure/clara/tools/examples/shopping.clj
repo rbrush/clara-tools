@@ -150,7 +150,9 @@
                               (->Order 2013 :august 20)
                               (->Purchase 20 :gizmo)
                               (->Purchase 120 :widget)
-                              (->Purchase 90 :widget)) ; Insert some facts.
+                              (->Purchase 90 :widget))
+                      (insert-all (for [i (range 100)]
+                                    (->Purchase i :monkey)))
                       (fire-rules)))
 
   (w/cancel-watch! sess)

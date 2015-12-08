@@ -15,7 +15,7 @@
 
   (let [{:keys [title path search]} @table-state-ref
         columns (get-columns @records-ref path get-record-fn)]
-    [:div.panel.panel-default
+    [:div.panel.panel-default {:style {:height "100%"}}
      [:div.panel-heading.clearfix
       [:h4.panel-title.pull-left title]
       (when search
@@ -27,7 +27,7 @@
                   :value search
                   :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}]])]
      [:div.panel-body.record-table-content
-
+      {:style {:height "100%" :overflow-y "scroll"}}
       (when (seq path)
         (into [:span {:bsSize "small"
                       :onClick (fn [] (swap! table-state-ref assoc :path []))}]
@@ -37,7 +37,7 @@
                [[b/glyphicon {:glyph "remove"}]])))
 
       (when (seq @records-ref)
-        [b/table {:striped true :bordered true}
+        [b/table {:striped true :bordered false}
          [:thead
           (into [:tr]
                 (for [column columns]
