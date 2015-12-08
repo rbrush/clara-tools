@@ -54,9 +54,12 @@
 
 (defn- explanation-graph
   "Returns a graph that explains the support for the fact with the given ID."
-  [{:keys [fact-to-id id-to-fact id-to-explanation] :as session-info} fact-id]
-  (let [explanation (id-to-explanation fact-id)]
-    (explanation-to-graph (id-to-fact fact-id) fact-id explanation fact-to-id)))
+  [{:keys [fact-to-id id-to-fact id-to-explanation] :as session-info} fact-ids]
+  (apply merge-with
+         conj
+         (for [fact-id fact-ids
+               :let [explanation (id-to-explanation fact-id)]]
+           (explanation-to-graph (id-to-fact fact-id) fact-id explanation fact-to-id))))
 
 (defn to-session-info
   [session]
@@ -119,13 +122,13 @@
     (list-session-facts @w/sessions)
     (w/watch-sessions key list-session-facts)))
 
-(defmethod q/run-query :explain-fact
-  [[_ session-id fact-id :as query] key channel]
+(defmethod q/run-query :explain-facts
+  [[_ session-id fact-ids :as query] key channel]
   (letfn [(list-session-facts [sessions]
             (if-let [session (get-in sessions [session-id :session])]
               (q/send-response! channel
                                 key
-                                (explanation-graph (to-session-info session) fact-id))
+                                (explanation-graph (to-session-info session) fact-ids))
 
               (q/send-failure! channel key {:type :unknown-session})))]
 

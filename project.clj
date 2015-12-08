@@ -10,7 +10,7 @@
                  [secretary "1.2.3"]
                  [reagent "0.5.1"]
                  [org.clojure/core.cache "0.6.4"]
-                 [cljsjs/react-bootstrap "0.25.1-0"]
+                 [cljsjs/react-bootstrap "0.27.3-0"]
                  [http-kit "2.1.19"]
                  [com.cognitect/transit-cljs "0.8.232"]
                  [com.cognitect/transit-clj "0.8.285"]

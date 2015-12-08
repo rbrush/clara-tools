@@ -16,7 +16,7 @@
 (def main-page
   (page/html5 [:head
                [:link {:href  "/public/css/bootstrap.min.css" :rel "stylesheet" :type "text/css"}]
-               [:link {:href  "/public/css/dagre.css" :rel "stylesheet" :type "text/css"}]
+               [:link {:href  "/public/css/clara-tools.css" :rel "stylesheet" :type "text/css"}]
                [:title "Clara Tools"]
                [:body
                 [:div {:id "app"}]

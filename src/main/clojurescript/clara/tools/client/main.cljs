@@ -12,11 +12,11 @@
   (:import goog.History
            goog.history.EventType))
 
-(def app-state (atom {:active-tab :queries
-                      ;; Map of session id to information.
-                      :sessions {}
-                      ;; identifier for the currect active session.
-                      :active-session nil}))
+(defonce app-state (atom {:active-tab :queries
+                          ;; Map of session id to information.
+                          :sessions {}
+                          ;; identifier for the currect active session.
+                          :active-session nil}))
 
 (def active-tab (reagent/cursor app-state [:active-tab]))
 (def session-map (reagent/cursor app-state [:sessions]))
@@ -38,7 +38,7 @@
                 (get @session-map @active-session)
                 "No sessions selected.")]
 
-    (into [b/nav-dropdown {:eventKey :session-select :title title}]
+    (into [b/nav-dropdown {:eventKey :session-select :title title :id "select-sessions"}]
           (for [[session-id session-name] @session-map]
             [b/menu-item [:div {:onClick (fn [] (reset! active-session session-id))}
                           session-name]]))))
@@ -55,7 +55,7 @@
                [:sessions]
                (fn [results]
                  (reset! session-map results)))
-  [:div
+  [:div {:style {:min-height "100%" :height "100%"}}
 
   [b/navbar
 
@@ -90,7 +90,7 @@
   (reset! active-tab :logic))
 
 (defroute "/" {:as params}
-  (reset! active-tab :query))
+  (reset! active-tab :queries))
 
 
 

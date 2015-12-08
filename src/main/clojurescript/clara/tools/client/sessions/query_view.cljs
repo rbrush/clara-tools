@@ -18,7 +18,7 @@
      [:th "Documentation"]
      [:th "Run"]]
     (into [:tbody]
-          (for [query (vals @queries)]
+          (for [query queries]
             [:tr
              [:td (:name query)]
              [:td (if (seq (:params query))
@@ -30,6 +30,7 @@
                    [:em ">"]]]]))]])
 
 (defn- query-params [query-params]
+  "Query params is a map of parameter names to values."
   (when (seq @query-params)
     [bs/grid
 
@@ -49,58 +50,69 @@
                                           assoc name new-val)))}]])
        @query-params)]]))
 
-(defn query-view [view-state]
+(defn- run-query [queries active-query active-session active-query-results-ref]
+  (let [active-query-params (get-in queries [active-query :params])]
 
-  (let [session-queries (atom {})
+    (chan/run-query! [:run-active-query active-session]
+                     ;; TODO: include query parameters...
+                     [:query active-session
+                      active-query
+                      active-query-params
+                      {:filter (get-in queries [active-query :table-state :search])}]
+                     (fn [response]
+                       (reset! active-query-results-ref response)))))
+
+(defn query-view [view-state]
+  (let [session-queries (reagent/cursor view-state [:queries])
         active-query (reagent/cursor view-state [:active-query])
         active-session (reagent/cursor view-state [:active-session])
-        active-query-params (atom {})
         active-query-results (atom [])
-        table-state (atom nil)
         on-query-change (fn [query]
                           (when (not= query @active-query)
-                            (reset! active-query (:name query))
-                            (reset! table-state {:title @active-query :path [] :search ""})))]
 
-    ;; Run the initial query to get our list of Clara queries.
-    (chan/run-query! [:get-queries @active-session]
-                     [:queries @active-session]
-                     (fn [response]
-                       (reset! session-queries (into {}
-                                                     (for [query  response]
-                                                       [(:name query) query])))))
+                            (reset! active-query (:name query))))]
+
+    ;; Get the list of queries available in the session if we haven't already.
+    (when-not (:queries @view-state)
+      (chan/run-query! [:get-queries @active-session]
+                       [:queries @active-session]
+                       (fn [response]
+
+                         (swap! view-state assoc :queries
+                                (into {}
+                                      (for [query response]
+                                        [(:name query) {:table-state
+                                                        {:title (:name query)
+                                                         :search ""
+                                                         :path []}
+                                                        :query-info query
+                                                        ;; Create an empty paramater map.
+                                                        :params (into {}
+                                                                      (for [param (:params query)]
+                                                                        {param nil}))}
+                                         ]))))))
+
 
     ;; Re-run the current query when it or the table state changes.
     (reagent.ratom/run!
      (when @active-query
-       ;; Reset the query parameters if they have changed.
-       (when (not= (set (keys @active-query-params))
-                   (get-in @session-queries [@active-query :params]))
-         (reset! active-query-params
-                 (into {}
-                       (for [param-name (get-in @session-queries [@active-query :params])]
-                         [param-name ""]))))
-
-       (chan/run-query! [:run-active-query @active-session]
-                        ;; TODO: include query parameters...
-                        [:query @active-session
-                         @active-query
-                         @active-query-params
-                         {:filter (:search @table-state)}]
-                        (fn [response]
-                          (reset! active-query-results response)))))
+       (run-query @session-queries @active-query @active-session active-query-results)))
 
     (fn [view-state]
-      [bs/grid
-       [bs/row
-        [:h4 "Queries"]
-        [query-list
-         session-queries
-         on-query-change]
-        (when @table-state
-          [:div
-           [query-params active-query-params]
-           [rt/render-table
-            active-query-results
-            {}
-            table-state]])]])))
+      (let [table-state (reagent/cursor view-state [:queries @active-query :table-state])
+            active-query-params (reagent/cursor view-state [:queries @active-query :params])]
+
+        [bs/grid
+         [bs/row
+          [:h4 "Queries"]
+          [query-list
+           (for [query-seq (vals (:queries @view-state))]
+             (:query-info query-seq))
+           on-query-change]
+          (when @active-query
+            [:div
+             [query-params active-query-params]
+             [rt/render-table
+              active-query-results
+              {}
+              table-state]])]]))))

@@ -15,31 +15,37 @@
 
   (let [{:keys [title path search]} @table-state-ref
         columns (get-columns @records-ref path get-record-fn)]
-    [b/panel {:header title}
+    [:div.panel.panel-default
+     [:div.panel-heading.clearfix
+      [:h4.panel-title.pull-left title]
+      (when search
+        [:div.input-group.pull-right
+         {:style {:width "200px"
+                  :float "right"}}
+         [:input {:type "text"
+                  :placeholder "search table"
+                  :value search
+                  :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}]])]
+     [:div.panel-body.record-table-content
 
-     (when search
-       [b/input {:type "text"
-                 :placeholder "search table"
-                 :value search
-                 :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}])
-     (when (seq path)
-       (into [:span {:bsSize "small"
-                     :onClick (fn [] (swap! table-state-ref assoc :path []))}]
-             (concat
-              (for [path-item path]
-                [:span " / " (name path-item) " " ])
-              [[b/glyphicon {:glyph "remove"}]])))
+      (when (seq path)
+        (into [:span {:bsSize "small"
+                      :onClick (fn [] (swap! table-state-ref assoc :path []))}]
+              (concat
+               (for [path-item path]
+                 [:span " / " (name path-item) " " ])
+               [[b/glyphicon {:glyph "remove"}]])))
 
-     (when (seq @records-ref)
-       [b/table {:striped true :bordered true}
-        [:thead
-         (into [:tr]
-               (for [column columns]
-                 [:th {:onClick (fn [] (swap! table-state-ref update :path conj column))} (name column)]))
-         (into [:tbody]
-               (for [row @records-ref
-                     :let [sub-row (get-in (get-record-fn row) path)]]
-                 (into [:tr (when on-row-click-fn
-                              {:onClick (fn [] (on-row-click-fn (row-id-fn row)))})]
-                       (for [column columns]
-                         [:td (str (get sub-row column))]))))]])]))
+      (when (seq @records-ref)
+        [b/table {:striped true :bordered true}
+         [:thead
+          (into [:tr]
+                (for [column columns]
+                  [:th {:onClick (fn [] (swap! table-state-ref update :path conj column))} (name column)]))
+          (into [:tbody]
+                (for [row @records-ref
+                      :let [sub-row (get-in (get-record-fn row) path)]]
+                  (into [:tr (when on-row-click-fn
+                               {:onClick (fn [] (on-row-click-fn (row-id-fn row)))})]
+                        (for [column columns]
+                          [:td (str (get sub-row column))]))))]])]]))
