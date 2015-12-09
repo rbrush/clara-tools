@@ -50,6 +50,39 @@
 ;; TODO: investigate making this part of component state.
 (def explanation-graph (atom empty-graph))
 
+(def context-details (atom nil))
+
+(defn context-menu-content [node-key node fact-ids-ref]
+  [:div.btn-group.btn-group-vertical
+
+   [:button.btn.btn-default
+    {:type "button"
+     :on-click #(js/alert (str node))}
+    "Include!"]])
+
+(defn context-menu [fact-ids]
+  (when-let [{:keys [x y node-key] :as details} @context-details]
+    [:div {:style {:position "absolute"
+                   :left (str (- x 10) "px")
+                   :top (str (- y 5) "px")
+                   :display "inline-block"
+                   :z-index 1000}
+           :on-mouse-leave #(reset! context-details nil)}
+     (let [node (get-in @explanation-graph [:nodes node-key])]
+
+       ;; Currently we only display a menu on fact nodes.
+       (when (= :fact (:type node))
+         [:div.btn-group.btn-group-vertical
+          (if (some #{node-key} @fact-ids)
+            [:button.btn.btn-default
+             {:type "button"
+              :on-click #(swap! fact-ids (fn [ids] (remove #{node-key} ids)))}
+             "Remove Supporting Explanation"]
+            [:button.btn.btn-default
+             {:type "button"
+              :on-click #(swap! fact-ids conj node-key)}
+             "Include Supporting Explanation"])]))]))
+
 (defn- explanation-info-setup []
 
   ;; Reference the graph here so we know to re-render the
@@ -72,7 +105,7 @@
                            dagre-graph (dagre/mk-graph "#d3-node svg g"
                                                        display-graph
                                                        {:on-node-click nil
-                                                        :on-context-menu nil})]
+                                                        :on-context-menu  #(reset! context-details %)})]
                        (dagre/render! dagre-graph)))]
 
     (reagent/create-class
@@ -118,11 +151,12 @@
 
     (fn [view-state]
       [:div.container-fluid {:style {:height "100%"}}
+       [context-menu fact-ids]
        [:div.row {:style {:height "100%"}}
         [:div.col-lg-3.col-md-3.col-sm-3
          [show-fact-types fact-types on-type-change]]
 
-        [:div.col-lg-9.col-md-9.col-sm-9 {:style {:height "100%"}}
+        [:div.col-lg-9.col-md-9.col-sm-9 {:style {:height "90%"}}
 
          (when (seq @fact-ids)
            [:div.panel.panel-default {:style {:height "60%"}}
@@ -131,14 +165,14 @@
              [:div.input-group.pull-right
               {:style {:width "80px"
                        :float "right"}}
-              [:button.btn.btn-sm.btn-default {:onClick (fn [] (reset! fact-ids []))} "Clear" ]]]
+              [:button.btn.btn-sm.btn-default {:onClick (fn [] (reset! fact-ids #{}))} "Clear" ]]]
 
 
             [render-explanation-graph]])
 
          (when @active-type
            [:div (if (seq @fact-ids)
-                   {:style {:height "40%"}}
+                   {:style {:height "30%"}}
                    {:style {:height "100%"}})
             [rt/render-table
              fact-list
