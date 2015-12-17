@@ -2,6 +2,7 @@
   (:require [clara.rules.accumulators :as acc]
             [clara.rules :refer :all]
             [clara.tools.watch :as w]
+            [cognitect.transit :as transit]
             [clara.tools.examples.shopping.records :refer :all])
   (:import [clara.tools.examples.shopping.records Order Customer
             Purchase Discount Total Promotion]))
@@ -128,12 +129,16 @@
 
 
   (def other-sess (-> (w/mk-watched-session "My Other Test Session."
-                                            'clara.tools.examples.shopping :cache false)
+                                            'clara.tools.examples.shopping
+                                            :cache false
+                                            :write-handlers {java.net.URL
+                                                             (transit/write-handler "s"
+                                                                                    (fn [url] (.toString url)))})
                       (insert (->Customer :vip)
                               (->Order 2013 :august 20)
                               (->Purchase 20 :gizmo)
                               (->Purchase 120 :widget)
-                              (->Person "Alice" "Smith" "Betty" 50
+                              (->Person "Alice" "Smith" (java.net.URL. "http://foo.bar") 50
                                         :female "123 Fake Street" "Lemur" "Missouri" "12345" true )
                               (->Person "Bob" "Smith" "Betty" 60
                                         :male "123 Fake Street" "Lemur" "Missouri" "12345" true )

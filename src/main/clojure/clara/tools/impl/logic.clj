@@ -32,13 +32,6 @@
       %)
    sources))
 
-(defn- condition-children
-  "Returns a sequence of children for the given condition."
-  [condition]
-  (if #(operators (cs/condition-type condition))
-    (rest condition)
-    []))
-
 (defn- condition-seq
   "Returns a sequence of conditions used in the given production,
    include expression nodes."
@@ -47,7 +40,7 @@
             #(rest %)
             (if (= 1 (count (:lhs production)))
               (first (:lhs production))
-              (into [:and] (:lhs production)))))  ; Add implied and for top-level conditions.
+              (into [:and] (:lhs production))))) ; Add implied and for top-level conditions.
 
 (defn- condition-to-id-map
   "Returns a map associating conditions to node ids"
@@ -83,7 +76,6 @@
 
     ;; Create the ->Record symbol so we can resolve the type.
     (str (string/join "." (drop-last parts)) "/->" (last parts))))
-
 
 (defmulti condition-graph
   "Creates a sub graph for the given condition."
@@ -243,7 +235,6 @@
 (defn connects-to
   "Returns the subset of the graph that transitively connects to the given node key."
   [graph node-key]
-  (println "TO: " node-key)
   (walk-graph graph
               node-key
               (fn [node-key]
@@ -256,7 +247,6 @@
 (defn reachable-from
   "Returns the subset of the graph transitively reachable from the node with the given ID"
   [graph node-key]
-  (println "FROM: " node-key)
   (walk-graph graph
               node-key
               (fn [node-key]
@@ -298,9 +288,10 @@
             (if-let [session (get-in sessions [session-id :session])]
               (q/send-response! channel
                                 key
-                                (logic-graph (w/sources session)))
+                                (q/classes-to-symbols (logic-graph (w/sources session)))
+                                (get-in sessions [session-id :write-handlers]))
 
-              (q/send-failure! channel key {:type :unknown-session})))]
+              (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (list-session-facts @w/sessions)
     (w/watch-sessions key list-session-facts)))

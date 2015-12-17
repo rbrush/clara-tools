@@ -9,6 +9,7 @@
             [clara.tools.queries :as q]
             [clara.tools.impl.facts :as facts]
             [clara.tools.impl.logic :as logic]
+            [cognitect.transit :as transit]
             [clojure.edn :as edn])
 
   (:import [org.httpkit.server AsyncChannel]))
@@ -27,27 +28,51 @@
 
 (defonce channels (atom #{}))
 
+(defn- to-transit
+  "Converts a data structure to a JSON-encoded transit."
+  [data write-handlers]
+  (let [out (java.io.ByteArrayOutputStream.)
+        writer (transit/writer out
+                               :json
+                               {:handlers write-handlers})]
+
+    (transit/write writer data)
+    (String. (.toByteArray out))))
+
+(defn- from-transit
+  "Converts a JSON-encoded transit string into the corresponding data structure."
+  [transit-json-string]
+  (let [in (java.io.ByteArrayInputStream. (.getBytes ^String transit-json-string))
+        reader (transit/reader in :json)]
+    (transit/read reader)))
+
 (extend-type AsyncChannel
   q/QueryResponseChannel
-  (send-response! [channel key response]
-    (send! channel (pr-str {:key key :response response})))
+  (send-response! [channel key response write-handlers]
+    (send! channel (to-transit {:key key :response response} write-handlers)))
 
-  (send-failure! [channel key failure]
-    (send! channel (pr-str {:key key :error failure}))))
+  (send-failure! [channel key failure write-handlers]
+    (send! channel (to-transit {:key key :error failure}))))
 
 (def running-queries (atom {}))
 
 (defn- handle-request [channel request-string]
-  (let [{:keys [type key request] :as message} (edn/read-string request-string)]
+  (let [{:keys [type key request] :as message} (from-transit request-string)]
     (if (not (and type key request))
       (println "INVALID MESSAGE:" (pr-str message))
-      (case type
+      (try
+        (case type
 
-        :start-query (let [cancel-fn (q/run-query request key channel)]
-                       (swap! running-queries assoc key cancel-fn))
-        :end-query (let [cancel-fn (get @running-queries key)]
-                     ;; (cancel-fn request)
-                     (swap! running-queries dissoc key))))))
+          :start-query (let [cancel-fn (q/run-query request key channel)]
+                         (swap! running-queries assoc key cancel-fn))
+          :end-query (let [cancel-fn (get @running-queries key)]
+                       ;; (cancel-fn request)
+                       (swap! running-queries dissoc key)))
+
+        ;; TODO: appropriate logging.
+        (catch Exception e
+          (println "EXCEPTION" (.getMessage e))
+          (.printStackTrace e))))))
 
 (defn ws-handler [request]
   (with-channel request channel
@@ -67,9 +92,9 @@
 
 (defn start-server!
   "Starts an http-kit server to support the tools UI."
-  []
+  [port]
   (when (nil? @server)
-    (reset! server (http-kit/run-server app {:port 8080}))))
+    (reset! server (http-kit/run-server app {:port port}))))
 
 (defn stop-server!
   []

@@ -14,7 +14,15 @@
 (defn- explanation-to-graph
   "Converts an explanation to a graph."
   [fact fact-id explanation fact-to-id]
-  (let [conditions (map (fn [[fact condition]] condition ) (:matches explanation))]
+  (let [fact-condition-tuples (map (fn [[fact condition]]
+                                     ;; Replace classes so it can be sent to the client.
+                                     [fact
+                                      (if (instance? Class (:type condition))
+                                         (assoc condition :type (symbol (.getName (:type condition))))
+                                         condition)])
+                                   (:matches explanation))
+
+        conditions (map second fact-condition-tuples)]
     (apply merge-with conj
            {:nodes  {fact-id {:type :fact
                               :value (pr-str fact)}}
@@ -31,7 +39,7 @@
                               (rest conditions)))}
 
            ;; Create fact and conditions nodes and edges between them.
-           (for [[fact condition] (:matches explanation)]
+           (for [[fact condition] fact-condition-tuples]
 
              ;; Accumulated values will not have a fact id, so
              ;; generate one with a hash so it will be connected into the graph.
@@ -65,7 +73,8 @@
   [session]
   (let [inspection (inspect/inspect session)
         fact-to-id (into {}
-                         (for [fact (w/facts session)]
+                         (for [fact (w/facts session)
+                               :when fact]
                            [fact (fact-to-id fact)]))
         fact-to-explanation (for [[node insertions] (-> inspection :insertions)
                                   {:keys [explanation fact]} insertions]
@@ -94,11 +103,13 @@
               (q/send-response! channel
                                 key
                                 (->> (w/facts session)
+                                     (remove nil?)
                                      (map (fn [fact] (.getName (type fact)) ))
                                      (distinct)
-                                     (sort)))
+                                     (sort))
+                                (get-in sessions [session-id :write-handlers]))
 
-              (q/send-failure! channel key {:type :unknown-session})))]
+              (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (list-session-facts @w/sessions)
     (w/watch-sessions key list-session-facts)))
@@ -113,11 +124,13 @@
                                 (into {}
                                       (w/clean-and-filter
                                        (for [fact (w/facts session)
-                                             :when (= fact-type (.getName (type fact)))]
+                                             :when (and fact
+                                                        (= fact-type (.getName (type fact))))]
                                          [(fact-to-id fact) fact])
-                                       filter)))
+                                       filter))
+                                (get-in sessions [session-id :write-handlers]))
 
-              (q/send-failure! channel key {:type :unknown-session})))]
+              (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (list-session-facts @w/sessions)
     (w/watch-sessions key list-session-facts)))
@@ -128,9 +141,10 @@
             (if-let [session (get-in sessions [session-id :session])]
               (q/send-response! channel
                                 key
-                                (explanation-graph (to-session-info session) fact-ids))
+                                (q/classes-to-symbols (explanation-graph (to-session-info session) fact-ids))
+                                (get-in sessions [session-id :write-handlers]))
 
-              (q/send-failure! channel key {:type :unknown-session})))]
+              (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (list-session-facts @w/sessions)
     (w/watch-sessions key list-session-facts)))

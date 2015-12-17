@@ -1,6 +1,6 @@
 (ns clara.tools.client.channel
   "Channel to interact with the Clara tools back end."
-  (:require [cljs.reader :as reader]))
+  (:require [cognitect.transit :as transit]))
 
 ;; Atom containing the web socket connection to th eback end.
 (defonce ^:private channel (atom nil))
@@ -11,10 +11,13 @@
 ;; Map of query keys to handlers.
 (def query-handlers (atom {}))
 
+(def transit-reader (transit/reader :json))
+(def transit-writer (transit/writer :json))
+
 (defn- receive-message [message]
 
   (when (.-data message)
-    (let [{:keys [query key response error] :as message} (reader/read-string (.-data message))]
+    (let [{:keys [query key response error] :as message} (transit/read transit-reader (.-data message))]
 
       (if error
 
@@ -39,7 +42,7 @@
     (do
 
       (.log js/console (str "Sending: " (pr-str message)))
-      (.send @channel (pr-str message)))
+      (.send @channel (transit/write transit-writer message)))
 
     (do
       ;; Connect if we haven't done so already.
@@ -48,7 +51,6 @@
 
       ;; Wait for channel to become available and then send a message.
       (js/setTimeout (fn [] (send-message! message)), 100))))
-
 
 (defn run-query!
   ([key query on-success]

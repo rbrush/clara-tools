@@ -43,7 +43,8 @@
                               key
                               (into {}
                                     (for [[id {name :name}] sessions]
-                                      [id name]))))]
+                                      [id name]))
+                              {}))]
 
     ;; Run the query and then watch the sessions for changes.
     (session-map @sessions)
@@ -65,16 +66,16 @@
                          (if-let [session (get-in sessions [session-id :session])]
                            (q/send-response! channel
                                              key
-                                             (get-queries session))
-                           (q/send-failure! channel query {:type :unknown-session})))]
+                                             (get-queries session)
+                                             (get-in sessions [session-id :write-handlers]))
+                           (q/send-failure! channel query {:type :unknown-session} {})))]
 
     (query-sessions @sessions)
     (watch-sessions key query-sessions)))
 
 
 (defn clean-and-filter
-  "Clears type tags from the given structure
-  that may not be readable by the cient. The optional search parameter can be used to filter results."
+  "Filters items that do not contain anything in the given filter."
   [data filter]
   (let [filter-strings (if (empty? filter)
                          nil
@@ -88,7 +89,7 @@
                 :when (or (empty? filter-strings)
                           (every? #(.contains ^String lower-string %) filter-strings))]
 
-            (read-string datum-string)))))
+            datum))))
 
 (defmethod q/run-query :query
   [query key channel]
@@ -103,9 +104,10 @@
                            (let [results (apply r/query session query-name param-seq)]
                              (q/send-response! channel
                                                key
-                                               (clean-and-filter results filter)))
+                                               (clean-and-filter results filter)
+                                               (get-in sessions [session-id :write-handlers])))
 
-                           (q/send-failure! channel query {:type :unknown-session})))]
+                           (q/send-failure! channel query {:type :unknown-session} {})))]
 
     (query-sessions @sessions)
     (watch-sessions key query-sessions)))
@@ -304,7 +306,8 @@
   "Creates a watched session from the given raw session."
   [session-name ; Session name for display purposes
    session-load-fn ; Function used to load the session.
-   sources] ; Rule sources for logic inspection.
+   sources  ; Rule sources for logic inspection.
+   write-handlers]
   (let [raw-session (session-load-fn)
         session-id  (.toString (java.util.UUID/randomUUID))
         source-watch-future (mk-source-watch-future session-id sources)
@@ -313,7 +316,8 @@
 
     (swap! sessions assoc session-id {:name session-name
                                       :session watched-session
-                                      :reload-future source-watch-future})
+                                      :reload-future source-watch-future
+                                      :write-handlers write-handlers})
 
     watched-session))
 

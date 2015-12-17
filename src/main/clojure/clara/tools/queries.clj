@@ -5,8 +5,8 @@
 (defmulti run-query (fn [query key channel] (first query)))
 
 (defprotocol QueryResponseChannel
-  (send-response! [channel key response])
-  (send-failure! [channel key failure]))
+  (send-response! [channel key response write-handlers])
+  (send-failure! [channel key failure write-handlers]))
 
 (defn is
   "Shorthand for Prismatic (s/one (s/eq value) name) to define schema conditions."
@@ -23,3 +23,13 @@
 (def session-queries-response [{:name s/Str
                                 (s/optional-key :doc) s/Str
                                 :params [s/Keyword]}])
+
+
+(defn classes-to-symbols
+  "Replaces instances of classes with symbols"
+  [form]
+  (clojure.walk/postwalk (fn [value]
+                           (if (instance? Class value)
+                             (symbol (.getName ^Class value))
+                             value))
+                         form))
