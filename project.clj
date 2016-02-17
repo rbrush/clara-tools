@@ -5,7 +5,7 @@
                  [prismatic/schema "1.0.1"]
                  [ring/ring-jetty-adapter "1.4.0"]
                  [compojure "1.4.0"]
-                 [org.toomuchcode/clara-rules "0.9.0"]
+                 [org.toomuchcode/clara-rules "0.10.0"]
                  [cljs-ajax "0.2.6"]
                  [hiccup "1.0.5"]
                  [secretary "1.2.3"]

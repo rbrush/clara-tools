@@ -103,11 +103,17 @@ html, body { margin:0; padding:0; overflow:hidden }
 
 (defonce ^:private server (atom nil))
 
+(def ^:private server-defaults {:port 8080 :join? false :host "localhost"})
+
 (defn start-server!
-  "Starts a Jetty server to support the tools UI."
-  []
-  (when (nil? @server)
-    (reset! server (ring/run-jetty #'app {:port 8080 :join? false}))))
+  "Starts a Jetty server to support the tools UI.  Optionally takes a
+  map of Jetty server options and merges it with the clara-tools defaults; 
+  consult the Ring documentation for a list of valid options.  Note that by default
+  the server only accepts connections from localhost."
+  ([] (start-server! server-defaults))
+  ([server-opts]
+   (when (nil? @server)
+     (reset! server (ring/run-jetty #'app (merge server-defaults server-opts))))))
 
 (defn stop-server!
   []
