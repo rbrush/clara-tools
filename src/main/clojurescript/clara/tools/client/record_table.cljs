@@ -41,11 +41,11 @@
          [:thead
           (into [:tr]
                 (for [column columns]
-                  [:th {:onClick (fn [] (swap! table-state-ref update :path conj column))} (name column)]))
-          (into [:tbody]
-                (for [row @records-ref
-                      :let [sub-row (get-in (get-record-fn row) path)]]
-                  (into [:tr (when on-row-click-fn
-                               {:onClick (fn [] (on-row-click-fn (row-id-fn row)))})]
-                        (for [column columns]
-                          [:td (str (get sub-row column))]))))]])]]))
+                  [:th {:onClick (fn [] (swap! table-state-ref update :path conj column))} (name column)]))]
+         (into [:tbody]
+               (for [row @records-ref
+                     :let [sub-row (get-in (get-record-fn row) path)]]
+                 (into [:tr (when on-row-click-fn
+                              {:onClick (fn [] (on-row-click-fn (row-id-fn row)))})]
+                       (for [column columns]
+                         [:td (str (get sub-row column))]))))])]]))

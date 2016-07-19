@@ -29,6 +29,7 @@
 (defn session-selector []
   (let [sessions (keys @session-map)
 
+        ;; If only one session exists, make it the active session.
         _ (case (count sessions)
             0 (reset! active-session nil)
             1 (reset! active-session (first sessions))
@@ -57,7 +58,7 @@
                  (reset! session-map results)))
   [:div {:style {:min-height "100%" :height "100%"}}
 
-  [b/navbar
+   [b/navbar
 
     (into
       [b/nav {:bsStyle "tabs" :activeKey @active-tab }]

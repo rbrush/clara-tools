@@ -16,18 +16,18 @@
      [:th "Name"]
      [:th "Params"]
      [:th "Documentation"]
-     [:th "Run"]]
-    (into [:tbody]
-          (for [query queries]
-            [:tr
-             [:td (:name query)]
-             [:td (if (seq (:params query))
-                    (string/join " " (:params query))
-                    "none")]
-             [:td (:doc query)]
-             [:td [bs/button
-                   {:onClick #(on-run-query query)}
-                   [:em ">"]]]]))]])
+     [:th "Run"]]]
+   (into [:tbody]
+         (for [query queries]
+           [:tr
+            [:td (:name query)]
+            [:td (if (seq (:params query))
+                   (string/join " " (:params query))
+                   "none")]
+            [:td (:doc query)]
+            [:td [bs/button
+                  {:onClick #(on-run-query query)}
+                  [:em ">"]]]]))])
 
 (defn- query-params [query-params]
   "Query params is a map of parameter names to values."

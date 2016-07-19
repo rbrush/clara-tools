@@ -11,11 +11,11 @@
   [bs/table {:striped true :bordered true}
    [:thead
     [:tr
-     [:th "Type"]]
-    (into [:tbody]
-          (for [fact-type @fact-types]
-            [:tr
-             [:td {:onClick (fn [] (on-type-change fact-type))} fact-type]]))]])
+     [:th "Type"]]]
+   (into [:tbody]
+         (for [fact-type @fact-types]
+           [:tr
+            [:td {:onClick (fn [] (on-type-change fact-type))} fact-type]]))])
 
 
 (def empty-graph {:nodes {} :edges {}})

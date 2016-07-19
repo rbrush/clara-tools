@@ -23,6 +23,9 @@
                 [:div {:id "app"}]
                 [:div
                  [:script {:src "/public/js/d3.js"}]
+                 [:script {:src "/public/js/react.min.js"}]
+                 [:script {:src "/public/js/react-dom.min.js" }]
+                 [:script {:src "/public/js/react-bootstrap.min.js"}]
                  [:script {:src "/public/js/dagre-d3.js"}]
                  [:script {:src "/public/js/clara-tools.js"}]]]]))
 
@@ -52,7 +55,7 @@
     (send! channel (to-transit {:key key :response response} write-handlers)))
 
   (send-failure! [channel key failure write-handlers]
-    (send! channel (to-transit {:key key :error failure}))))
+    (send! channel (to-transit {:key key :error failure} write-handlers))))
 
 (def running-queries (atom {}))
 
