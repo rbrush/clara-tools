@@ -1,8 +1,12 @@
-(ns clara.tools.logic-graph
-  (:require [schema.core :as s]
-            [clojure.string :as string]
+(ns clara.tools.impl.logic
+  "Queries to support the exploration of rule logic."
+  (:require [clojure.string :as string]
+            [clara.tools.queries :as q]
             [clara.rules.schema :as cs]
-            [clara.rules.compiler :as com]))
+            [schema.core :as s]
+            [clara.rules.compiler :as com]
+            [clara.tools.impl.watcher :as w]))
+
 
 (def ^:private operators #{:and :or :not})
 
@@ -28,13 +32,6 @@
       %)
    sources))
 
-(defn- condition-children
-  "Returns a sequence of children for the given condition."
-  [condition]
-  (if #(operators (cs/condition-type condition))
-    (rest condition)
-    []))
-
 (defn- condition-seq
   "Returns a sequence of conditions used in the given production,
    include expression nodes."
@@ -43,7 +40,7 @@
             #(rest %)
             (if (= 1 (count (:lhs production)))
               (first (:lhs production))
-              (into [:and] (:lhs production)))))  ; Add implied and for top-level conditions.
+              (into [:and] (:lhs production))))) ; Add implied and for top-level conditions.
 
 (defn- condition-to-id-map
   "Returns a map associating conditions to node ids"
@@ -79,7 +76,6 @@
 
     ;; Create the ->Record symbol so we can resolve the type.
     (str (string/join "." (drop-last parts)) "/->" (last parts))))
-
 
 (defmulti condition-graph
   "Creates a sub graph for the given condition."
@@ -239,7 +235,6 @@
 (defn connects-to
   "Returns the subset of the graph that transitively connects to the given node key."
   [graph node-key]
-  (println "TO: " node-key)
   (walk-graph graph
               node-key
               (fn [node-key]
@@ -252,7 +247,6 @@
 (defn reachable-from
   "Returns the subset of the graph transitively reachable from the node with the given ID"
   [graph node-key]
-  (println "FROM: " node-key)
   (walk-graph graph
               node-key
               (fn [node-key]
@@ -286,3 +280,18 @@
                           (re-find facts-regex value))
                subgraph [(connects-to graph node-key) (reachable-from graph node-key)]]
            subgraph)))
+
+
+(defmethod q/run-query :logic-graph
+  [[_ session-id :as query] key channel]
+  (letfn [(list-session-facts [sessions]
+            (if-let [session (get-in sessions [session-id :session])]
+              (q/send-response! channel
+                                key
+                                (q/classes-to-symbols (logic-graph (w/sources session)))
+                                (get-in sessions [session-id :write-handlers]))
+
+              (q/send-failure! channel key {:type :unknown-session} {})))]
+
+    (list-session-facts @w/sessions)
+    (w/watch-sessions key list-session-facts)))

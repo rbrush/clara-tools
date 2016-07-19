@@ -1,0 +1,15 @@
+html, body { margin:0; padding:0; overflow:hidden }
+
+.node rect {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: #fff;
+}
+.edgeLabel rect {
+    fill: #fff;
+}
+.edgePath {
+    stroke: #333;
+    stroke-width: 1.5px;
+    fill: none;
+}

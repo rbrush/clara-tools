@@ -1,4 +1,4 @@
-(ns clara.tools.dagre
+(ns clara.tools.client.graphs.dagre
   "Dagre-based graphing to support Clara tools."
   (:require [schema.core :as s :refer-macros [defschema]]))
 

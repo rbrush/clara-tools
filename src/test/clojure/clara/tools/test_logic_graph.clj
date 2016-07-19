@@ -1,8 +1,7 @@
 (ns clara.tools.test-logic-graph
-  (:require [clara.tools.logic-graph :refer :all]
+  (:require [clara.tools.impl.logic :refer :all]
             [clojure.test :refer :all]
             [clara.rules.accumulators :as acc]
-            [clara.tools.ui :as ui]
             [clara.rules :refer :all]))
 
 (defrecord Order [year month day])

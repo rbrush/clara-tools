@@ -1,4 +1,4 @@
-(ns clara.tools.graphing
+(ns clara.tools.client.graphs.graphing
   "Tools to work with graphs."
   (:require [schema.core :as s]))
 
