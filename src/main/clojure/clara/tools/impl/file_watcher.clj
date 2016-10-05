@@ -1,6 +1,6 @@
 (ns clara.tools.impl.file-watcher
   "Utility functions for working with Clara."
-  (require [clara.rules :refer :all]))
+  (:require [clara.rules :refer :all]))
 
 (defn watch-files
   "Watches a sequence of file paths and invokes the given function if they change.
