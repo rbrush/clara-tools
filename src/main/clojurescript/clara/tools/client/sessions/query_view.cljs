@@ -1,5 +1,6 @@
 (ns clara.tools.client.sessions.query-view
   "Tab to explore Clara queries."
+  (:refer-clojure :exclude [atom])
   (:require [reagent.core :as reagent :refer [atom]]
             [reagent.ratom :as ratom]
             [clara.tools.client.bootstrap :as bs]
@@ -29,29 +30,36 @@
                   {:onClick #(on-run-query query)}
                   [:em ">"]]]]))])
 
-(defn- query-params [query-params]
-  "Query params is a map of parameter names to values."
-  (when (seq @query-params)
-    [bs/grid
+(defn- read-param
+  "Reads the text of a query parameter as a value, falling back to the raw
+   string for input that isn't a readable form."
+  [text]
+  (when (seq text)
+    (let [value (try (reader/read-string text)
+                     (catch :default _ text))]
+      (if (symbol? value) (name value) value))))
 
-     [bs/row
-      (map
-       (fn [[name value]]
-         [bs/panel {:header "Query parameters"}
-          [bs/input {:type "text"
-                     :label (pr-str name)
-                     :labelClassName "col-md-1"
-                     :wrapperClassName "col-md-2"
-                     :value (str value)
-                     :onChange (fn [update]
-                                 (let [new-val (reader/read-string (-> update .-target .-value))
-                                       new-val (if (symbol? new-val) (name new-val) new-val)]
-                                   (swap! query-params
-                                          assoc name new-val)))}]])
-       @query-params)]]))
+(defn- query-params
+  "Query params is a map of parameter names to the text entered for them."
+  [query-params]
+  (when (seq @query-params)
+    [:div.card.mb-3
+     [:div.card-header "Query parameters"]
+     (into [:div.card-body]
+           (for [[name value] @query-params]
+             ^{:key (pr-str name)}
+             [:div.row.mb-2
+              [:label.col-md-1.col-form-label (pr-str name)]
+              [:div.col-md-2
+               [:input.form-control
+                {:type "text"
+                 :value (str value)
+                 :onChange (fn [update]
+                             (swap! query-params
+                                    assoc name (-> update .-target .-value)))}]]]))]))
 
 (defn- run-query [queries active-query active-session active-query-results-ref]
-  (let [active-query-params (get-in queries [active-query :params])]
+  (let [active-query-params (update-vals (get-in queries [active-query :params]) read-param)]
 
     (chan/run-query! [:run-active-query active-session]
                      ;; TODO: include query parameters...
@@ -94,7 +102,7 @@
 
 
     ;; Re-run the current query when it or the table state changes.
-    (reagent.ratom/run!
+    (ratom/run!
      (when @active-query
        (run-query @session-queries @active-query @active-session active-query-results)))
 
@@ -102,8 +110,9 @@
       (let [table-state (reagent/cursor view-state [:queries @active-query :table-state])
             active-query-params (reagent/cursor view-state [:queries @active-query :params])]
 
-        [bs/grid
+        [bs/grid {:fluid true}
          [bs/row
+          [bs/col
           [:h4 "Queries"]
           [query-list
            (for [query-seq (vals (:queries @view-state))]
@@ -115,4 +124,4 @@
              [rt/render-table
               active-query-results
               {}
-              table-state]])]]))))
+              table-state]])]]]))))

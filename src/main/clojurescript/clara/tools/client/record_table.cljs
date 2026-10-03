@@ -1,5 +1,6 @@
 (ns clara.tools.client.record-table
   "UI component for display tables of Clojure records or structs."
+  (:refer-clojure :exclude [atom])
   (:require [reagent.core :as reagent :refer [atom]]
             [clara.tools.client.bootstrap :as b]))
 
@@ -15,26 +16,26 @@
 
   (let [{:keys [title path search]} @table-state-ref
         columns (get-columns @records-ref path get-record-fn)]
-    [:div.panel.panel-default {:style {:height "100%"}}
-     [:div.panel-heading.clearfix
-      [:h4.panel-title.pull-left title]
+    [:div.card {:style {:height "100%"}}
+     [:div.card-header.d-flex.align-items-center
+      [:h5.card-title.mb-0 title]
       (when search
-        [:div.input-group.pull-right
-         {:style {:width "200px"
-                  :float "right"}}
-         [:input {:type "text"
+        [:div.ms-auto
+         {:style {:width "200px"}}
+         [:input.form-control.form-control-sm
+                 {:type "text"
                   :placeholder "search table"
                   :value search
                   :onChange (fn [update] (swap! table-state-ref assoc :search (-> update .-target .-value)))}]])]
-     [:div.panel-body.record-table-content
+     [:div.card-body.record-table-content
       {:style {:height "100%" :overflow-y "scroll"}}
       (when (seq path)
-        (into [:span {:bsSize "small"
+        (into [:span {:role "button"
                       :onClick (fn [] (swap! table-state-ref assoc :path []))}]
               (concat
                (for [path-item path]
                  [:span " / " (name path-item) " " ])
-               [[b/glyphicon {:glyph "remove"}]])))
+               [[:span.ms-1 {:title "Clear path"} "\u00d7"]])))
 
       (when (seq @records-ref)
         [b/table {:striped true :bordered false}

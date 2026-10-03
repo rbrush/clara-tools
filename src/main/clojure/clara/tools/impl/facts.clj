@@ -14,11 +14,11 @@
 (defn- explanation-to-graph
   "Converts an explanation to a graph."
   [fact fact-id explanation fact-to-id]
-  (let [fact-condition-tuples (map (fn [[fact condition]]
+  (let [fact-condition-tuples (map (fn [{:keys [fact condition]}]
                                      ;; Replace classes so it can be sent to the client.
                                      [fact
                                       (if (instance? Class (:type condition))
-                                         (assoc condition :type (symbol (.getName (:type condition))))
+                                         (assoc condition :type (symbol (.getName ^Class (:type condition))))
                                          condition)])
                                    (:matches explanation))
 

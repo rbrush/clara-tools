@@ -1,0 +1,52 @@
+# Toolchain for clara-tools.
+[tools]
+java = "temurin-21"
+node = "22"
+clojure = "1.12.6.1673"
+clj-kondo = "2026.05.25"
+
+[tasks.deps]
+description = "Download Clojure and npm dependencies, import clj-kondo configs"
+run = [
+  "clojure -P -M:dev:test:cljs:ui-dev:nrepl",
+  "npm ci",
+  "mkdir -p .clj-kondo",
+  "clj-kondo --copy-configs --dependencies --parallel --lint \"$(clojure -Spath -M:dev:cljs)\"",
+]
+
+[tasks.test]
+description = "Run Clojure tests"
+run = "clojure -M:test"
+
+[tasks.lint]
+# src/test is excluded: clara-rules' exported kondo hook misreads defrule/defquery docstrings.
+description = "Lint Clojure and ClojureScript sources"
+run = "clj-kondo --fail-level error --lint src/main"
+
+[tasks.repl]
+description = "Start an nREPL serving the release UI build"
+depends = ["cljs:release"]
+run = "clojure -M:dev:ui:nrepl"
+
+[tasks.dev]
+description = "Start an nREPL that also runs shadow-cljs, serving a hot-reloading UI build"
+depends = ["css"]
+run = "clojure -M:dev:cljs:ui-dev:nrepl"
+
+[tasks."cljs:release"]
+description = "Compile the optimized UI"
+depends = ["css"]
+run = "npx shadow-cljs release app"
+
+[tasks.css]
+description = "Copy Bootstrap CSS from node_modules"
+run = """
+for dir in target/resources target/dev; do
+  mkdir -p $dir/public/css
+  cp node_modules/bootstrap/dist/css/bootstrap.min.css $dir/public/css/
+done
+"""
+
+[tasks.build]
+description = "Build the library jar (includes the compiled UI)"
+run = "clojure -T:build jar"

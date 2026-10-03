@@ -1,6 +1,7 @@
 (ns clara.tools.queries
   "Support for querying Clara sessions and rulesets."
-  (:require [schema.core :as s]))
+  (:require [clojure.walk :as walk]
+            [schema.core :as s]))
 
 (defmulti run-query (fn [query key channel] (first query)))
 
@@ -28,8 +29,8 @@
 (defn classes-to-symbols
   "Replaces instances of classes with symbols"
   [form]
-  (clojure.walk/postwalk (fn [value]
-                           (if (instance? Class value)
-                             (symbol (.getName ^Class value))
-                             value))
-                         form))
+  (walk/postwalk (fn [value]
+                   (if (instance? Class value)
+                     (symbol (.getName ^Class value))
+                     value))
+                 form))

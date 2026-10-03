@@ -68,6 +68,21 @@
   =>
   (insert! (->Promotion :free-gizmo-or-widget :sticker)))
 
+(defrule big-spender-promotion
+  "Customers with any large purchase get a promotion."
+  [:exists [Purchase (> cost 500)]]
+  [Total (= ?total total)]
+  [:test (> ?total 1000)]
+  =>
+  (insert-unconditional! (->Promotion :big-spender :gift-card)))
+
+(defrule copy-promotions
+  "Inserts facts that aren't constructor calls, which the graph can't type."
+  [?promotion <- Promotion (= type :lunch)]
+  =>
+  (insert! ?promotion)
+  (doseq [p [?promotion]] (insert! p)))
+
 (defquery get-promotions
   "Query to find promotions for the purchase."
   []
@@ -80,3 +95,27 @@
     (doseq [[[from to] value] edges]
       (is (nodes from) (str "Expected " from " in graph for value " value))
       (is (nodes to) (str "Expected " to " in graph for value " value)))))
+
+(deftest test-exists-and-test-conditions
+  (let [{:keys [nodes edges]} (logic-graph ['clara.tools.test-logic-graph])
+        node-types (set (map :type (vals nodes)))
+        promotion-id "FT-clara.tools.test_logic_graph.Promotion"]
+
+    (is (node-types :exists))
+    (is (node-types :test))
+
+    ;; insert-unconditional! insertions are part of the graph.
+    (is (some (fn [[[from to] {:keys [type]}]]
+                (and (= to promotion-id)
+                     (= :inserts type)
+                     (= "clara.tools.test-logic-graph/big-spender-promotion"
+                        (get-in nodes [from :symbol]))))
+              edges))))
+
+(deftest test-production-without-namespace
+  ;; Productions built as data may have no :ns-name but use qualified symbols.
+  (let [production {:name "data-rule"
+                    :lhs [{:type Order :constraints []}]
+                    :rhs '(clara.rules/insert! (clara.tools.test-logic-graph/->Total 1))}
+        {:keys [nodes]} (logic-graph [[production]])]
+    (is (contains? nodes "FT-clara.tools.test_logic_graph.Total"))))

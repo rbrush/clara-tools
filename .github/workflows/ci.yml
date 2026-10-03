@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs for the same PR or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Lint, test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the toolchain pinned in mise.toml (Java, Node, Clojure CLI, clj-kondo...).
+      - uses: jdx/mise-action@v5
+
+      - name: Cache Clojure and npm dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.npm
+          key: deps-${{ runner.os }}-${{ hashFiles('deps.edn', 'package-lock.json') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: mise run deps
+
+      - name: Lint
+        run: mise run lint
+
+      - name: Test
+        run: mise run test
+
+      # Builds the release UI and the library jar, which includes it.
+      - name: Build
+        run: mise run build
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: clara-tools-jar
+          path: target/*.jar
+          if-no-files-found: error

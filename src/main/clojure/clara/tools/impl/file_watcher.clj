@@ -1,64 +1,69 @@
 (ns clara.tools.impl.file-watcher
   "Utility functions for working with Clara."
-  (:require [clara.rules :refer :all]))
+  (:require [clara.rules :refer [fire-rules insert-all]]
+            [clara.rules.compiler :as com])
+  (:import [java.nio.file ClosedWatchServiceException FileSystems Path Paths
+            StandardWatchEventKinds WatchEvent WatchEvent$Kind WatchKey WatchService]))
+
+(defn- normalize ^Path [path]
+  (-> (Paths/get (str path) (make-array String 0))
+      (.toAbsolutePath)
+      (.normalize)))
 
 (defn watch-files
-  "Watches a sequence of file paths and invokes the given function if they change.
+  "Watches a sequence of file paths and invokes the given function with the
+   path string of a file when it changes. Only the files' own directories are
+   watched, not their subdirectories.
 
-   Returns a future that runs indefinitely but can be stopped with future-cancel."
+   Returns a watcher that can be stopped with stop!, or nil if there are no files to watch."
   [path-strings watch-fn]
-  (let [ws (.. (java.nio.file.FileSystems/getDefault) (newWatchService))
-
-        paths (into #{}
-                    (for [path-string path-strings]
-                      (java.nio.file.Paths/get path-string
-                                               (make-array String 0))))
-
-        dirs (into #{}
-                   (for [^java.nio.file.Path path paths]
-                     (.getParent path)))
-
-        watchkeys (doall
-                   (for [dir dirs]
-                     ;; Sun-specific sensitivity handler is needed here for reasonable
-                     ;; latenency.
-                     (.register dir
-                                ws
-                                (into-array java.nio.file.WatchEvent$Kind
-                                            [java.nio.file.StandardWatchEventKinds/ENTRY_MODIFY])
-                                (into-array com.sun.nio.file.SensitivityWatchEventModifier
-                                            [com.sun.nio.file.SensitivityWatchEventModifier/HIGH]))))]
-    (future
-      (loop [cancelled false]
-        (when-not cancelled
-          (recur
-           (try
-
-             (Thread/sleep 20)
-             (doseq [^java.nio.file.WatchKey watchkey watchkeys
-                     update (.pollEvents watchkey)
-
-                     ;; Qualify the discovered update with
-                     ;; the watched directory to ensure the changed
-                     ;; file is one we are watching.
-                     :let [updated-path (.resolve (.watchable watchkey )
-                                                  (.context update))]]
-               (when (paths updated-path)
+  (let [paths (into #{} (map normalize) path-strings)
+        dirs (into #{} (map #(.getParent ^Path %)) paths)]
+    (when (seq dirs)
+      (let [ws (.newWatchService (FileSystems/getDefault))]
+        (try
+          (doseq [^Path dir dirs]
+            (.register dir ws ^"[Ljava.nio.file.WatchEvent$Kind;"
+                       (into-array WatchEvent$Kind [StandardWatchEventKinds/ENTRY_CREATE
+                                                    StandardWatchEventKinds/ENTRY_MODIFY])))
+          (catch Throwable t
+            (.close ws)
+            (throw t)))
+        (doto (Thread.
+               (fn []
                  (try
-                   (watch-fn (.toString updated-path))
-                   (catch Exception e
-                     (println "Exception:" e)))))
+                   (loop []
+                     (let [^WatchKey watchkey (.take ws)
+                           ;; A single save often produces several events (create and
+                           ;; modify), so reload each changed file only once per batch.
+                           updated-paths (into #{}
+                                               (comp (map #(.context ^WatchEvent %))
+                                                     (filter #(instance? Path %))
+                                                     ;; Qualify the changed file with the watched directory
+                                                     ;; to ensure it is one we are watching.
+                                                     (map #(.normalize (.resolve ^Path (.watchable watchkey) ^Path %)))
+                                                     (filter paths))
+                                               (.pollEvents watchkey))]
+                       (doseq [updated-path updated-paths]
+                         (try
+                           (watch-fn (str updated-path))
+                           ;; Keep watching even if reloading the file fails.
+                           (catch Throwable t
+                             (.printStackTrace t))))
+                       (.reset watchkey)
+                       (recur)))
+                   (catch ClosedWatchServiceException _)
+                   (catch InterruptedException _)))
+               "clara-tools-file-watcher")
+          (.setDaemon true)
+          (.start))
+        ws))))
 
-             false
-
-             ;; The thread has been cancelled, so clean up the
-             ;; watchers and return.
-             (catch java.util.concurrent.CancellationException e
-               (doseq [^java.nio.file.WatchKey watchkey watchkeys]
-                 (.cancel watchkey))
-               true))))))))
-
-
+(defn stop!
+  "Stops a watcher returned by watch-files."
+  [watcher]
+  (when watcher
+    (.close ^WatchService watcher)))
 
 (defn watch-rules-ns
   "Watches a rule namespace for changes and displays the resuls as rules are edited."
@@ -74,7 +79,7 @@
         update-fn (fn [updated-file]
 
                    ;; Clear any cached sessions so we can reload them.
-                   (clara.rules.compiler/clear-session-cache!)
+                   (com/clear-session-cache!)
 
                    ;; Reload namespaces as we detect changes.
                    (doseq [namespace namespaces]

@@ -1,6 +1,8 @@
 (ns clara.tools.client.graphs.dagre
   "Dagre-based graphing to support Clara tools."
-  (:require [schema.core :as s :refer-macros [defschema]]))
+  (:require [schema.core :as s :refer-macros [defschema]]
+            ["d3" :as d3]
+            ["dagre-d3-es" :refer [graphlib render]]))
 
 (defschema graph-schema {:nodes ; Nodes are a map of Node IDs to their metadata.
                           {s/Any ; Node ID.
@@ -14,94 +16,77 @@
                               (s/optional-key :class) s/Str  ; Space-separated string that can be used as DOM classes.
                               }}})
 
-(defn- update-dagre!
-  "Updates the given digraph with the given graph data."
-  [digraph {:keys [nodes edges] :as graph-data}]
+(defn- mk-digraph
+  "Returns a graphlib graph with the given graph data."
+  [{:keys [nodes edges] :as graph-data}]
+  (let [^js digraph (new (.-Graph graphlib) #js {:multigraph true})]
 
-  ;; Add nodes to the graph.
-  (doseq [[id {:keys [label class]}] nodes]
-    (.addNode digraph id (cond-> (js-obj)
-                                 label (doto (aset "label" label))
-                                 class (doto (aset "nodeclass" class)))))
+    (.setGraph digraph #js {:rankdir "TB"})
 
-  ;; Add edges to the graph.
-  (doseq [[[from to] {:keys [label class]}] edges]
-    (.addEdge digraph (str from "-" to) from to (cond-> (js-obj)
-                                                        label (doto (aset "label" label))
-                                                        class (doto (aset "edgeclass" class)))))
+    ;; Add nodes to the graph.
+    (doseq [[id {:keys [label class]}] nodes]
+      (.setNode digraph id (cond-> #js {:label (or label "")}
+                             class (doto (aset "class" class)))))
 
-  digraph)
+    ;; Add edges to the graph.
+    (doseq [[[from to] {:keys [label class]}] edges]
+      (.setEdge digraph from to
+                (cond-> #js {:label (or label "")}
+                  class (doto (aset "class" class)))
+                (str from "-" to)))
 
-(defrecord DagreGraph [node digraph renderer graph-data])
+    digraph))
+
+(defrecord DagreGraph [node digraph options graph-data])
 
 (defn mk-graph
-  "Returns a mutable Dagre-based graph bound to the given DOM selection."
+  "Returns a Dagre-based graph bound to the given DOM selection."
   ([selection] (mk-graph selection {:nodes {} :edges {}}))
   ([selection graph-data] (mk-graph selection graph-data {}))
 
-  ([selection {:keys [nodes edges] :as graph-data} {:keys [on-node-click
-                                                           on-context-menu
-                                                           context-menu-id] :as options}]
-     (let [digraph (update-dagre! (js/dagreD3.Digraph.) graph-data)
+  ([selection graph-data options]
+   (->DagreGraph (d3/select selection)
+                 (mk-digraph graph-data)
+                 options
+                 graph-data)))
 
-           layout (-> (js/dagreD3.layout)
-                      (.rankDir "TB"))
-
-           renderer (-> (js/dagreD3.Renderer.)
-                        (.layout layout))
-
-           default-draw-nodes (.drawNodes renderer)]
-
-       ;; Replace draw nodes function with one that adds CSS class information.
-       (.drawNodes
-        renderer
-        (fn [graph root]
-          (let [svg-nodes (default-draw-nodes graph root)]
-            (.each svg-nodes
-                   (fn [u]
-                     (this-as this
-                              (let [item (js/d3.select this)]
-
-                                (when on-node-click
-                                  (.on item  "click" on-node-click))
-
-
-                                (.on item "contextmenu"
-                                     (fn [node-key]
-                                       (js/d3.event.preventDefault)
-                                       (when on-context-menu
-
-                                         (on-context-menu {:node-key node-key
-                                                           :x (.-clientX  d3.event)
-                                                           :y (.-clientY d3.event)})
-
-                                         (comment (-> (js/d3.select (str "#" context-menu-id))
-                                                      (.style "position" "absolute")
-                                                      (.style "left" (str (.-clientX  d3.event) "px"))
-                                                      (.style "top" (str (.-clientY d3.event) "px"))
-                                                      (.style "display" "inline-block")
-                                                      (.on "mouseleave" (fn [] (-> (js/d3.select (str "#" context-menu-id))
-                                                                                  (.style "display" "none")))))))))
-
-                                (.classed
-                                 item
-                                 (.-nodeclass
-                                  (.node graph u))
-                                 true)))))
-            svg-nodes)))
-
-
-       (->DagreGraph (js/d3.select selection)
-                     digraph
-                     renderer
-                     graph-data))))
-
+(defn- enable-zoom!
+  "Lets the user drag to pan and scroll to zoom the given group within its SVG.
+   The current view is kept when the graph is re-rendered."
+  [^js group]
+  (let [^js svg (d3/select (.-ownerSVGElement (.node group)))
+        zoom (-> (d3/zoom)
+                 (.scaleExtent #js [0.1 4])
+                 (.on "zoom" (fn [^js event]
+                               (.attr group "transform" (.-transform event)))))]
+    (if (.attr svg "data-zoom")
+      (.call svg zoom)
+      (do (.attr svg "data-zoom" "true")
+          (.call svg zoom)
+          (.call svg (.-transform zoom) (.translate d3/zoomIdentity 20 20))))))
 
 (defn render!
   "Renders the graph at DOM node identified by the given selection."
-  [graph]
-  (let [{:keys [node digraph renderer]} graph]
-    (.run renderer digraph node))
+  [{:keys [node digraph options]}]
+  ;; Nothing to draw into, e.g. when there is no explanation to show.
+  (when (.node ^js node)
+    (let [{:keys [on-node-click on-context-menu]} options]
 
+      (enable-zoom! node)
 
-  )
+      ;; Start from an empty group so nodes from a previous render don't linger.
+      (.remove (.selectAll node "*"))
+
+      ((render) node digraph)
+
+      (-> node
+          (.selectAll "g.node")
+          (.on "click" (fn [_event node-key]
+                         (when on-node-click
+                           (on-node-click node-key))))
+          (.on "contextmenu" (fn [event node-key]
+                               (.preventDefault event)
+                               (when on-context-menu
+                                 (on-context-menu {:node-key node-key
+                                                   :x (.-clientX event)
+                                                   :y (.-clientY event)}))))))))
