@@ -1,0 +1,11 @@
+{:deps {:aliases [:cljs]}
+
+ :builds
+ {:app {:target :browser
+        :output-dir "target/resources/public/js"
+        :asset-path "/public/js"
+        :modules {:main {:init-fn clara.tools.client.main/init}}
+        ;; Dev builds go elsewhere so a stale one (which expects a running
+        ;; shadow-cljs server) is never served by the release REPL.
+        :dev {:output-dir "target/dev/public/js"}
+        :devtools {:after-load clara.tools.client.main/mount!}}}}

@@ -2,9 +2,8 @@
   "Server making the Clara Tools back end visible to clients."
   (:require [compojure.core :refer [defroutes context GET]]
             [compojure.route :as route]
-            [compojure.handler :as handler]
-            [org.httpkit.server :as http-kit
-             :refer [send! with-channel on-close on-receive]]
+            [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [org.httpkit.server :as http-kit :refer [send!]]
             [hiccup.page :as page]
             [clara.tools.queries :as q]
             [clara.tools.impl.facts :as facts]
@@ -16,18 +15,16 @@
 
 (def main-page
   (page/html5 [:head
+               [:meta {:charset "utf-8"}]
+               [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
                [:link {:href  "/public/css/bootstrap.min.css" :rel "stylesheet" :type "text/css"}]
                [:link {:href  "/public/css/clara-tools.css" :rel "stylesheet" :type "text/css"}]
-               [:title "Clara Tools"]
-               [:body
-                [:div {:id "app"}]
-                [:div
-                 [:script {:src "/public/js/d3.js"}]
-                 [:script {:src "/public/js/react.min.js"}]
-                 [:script {:src "/public/js/react-dom.min.js" }]
-                 [:script {:src "/public/js/react-bootstrap.min.js"}]
-                 [:script {:src "/public/js/dagre-d3.js"}]
-                 [:script {:src "/public/js/clara-tools.js"}]]]]))
+               ;; No favicon; avoids a 404 request from the browser.
+               [:link {:rel "icon" :href "data:,"}]
+               [:title "Clara Tools"]]
+              [:body
+               [:div {:id "app"}]
+               [:script {:src "/public/js/main.js"}]]))
 
 (defonce channels (atom #{}))
 
@@ -78,10 +75,10 @@
           (.printStackTrace e))))))
 
 (defn ws-handler [request]
-  (with-channel request channel
-    (swap! channels conj channel)
-    (on-close channel (fn [channel] swap! channels #(remove #{channel} %)))
-    (on-receive channel (fn [request] (handle-request channel request)))))
+  (http-kit/as-channel request
+                       {:on-open (fn [channel] (swap! channels conj channel))
+                        :on-close (fn [channel _status] (swap! channels disj channel))
+                        :on-receive (fn [channel message] (handle-request channel message))}))
 
 (defroutes routes
   (route/resources "/public/")
@@ -89,21 +86,29 @@
   (GET "/socket" request (ws-handler request)))
 
 ;; Support for query paramters, session state, etc.
-(def app (handler/site routes))
+(def app (wrap-defaults routes (-> site-defaults
+                                   ;; Static resources are served by the routes above.
+                                   (assoc :static false)
+                                   (assoc-in [:security :anti-forgery] false))))
 
 (defonce ^:private server (atom nil))
 
 (def server-defaults {:port 8080 :host "127.0.0.1"})
 
 (defn start-server!
-  "Starts a Jetty server to support the tools UI.  Optionally takes a
-  map of Jetty server options and merges it with the clara-tools defaults;
-  consult the Ring documentation for a list of valid options.  Note that by default
+  "Starts an http-kit server to support the tools UI.  Optionally takes a
+  map of http-kit server options and merges it with the clara-tools defaults;
+  consult the http-kit documentation for a list of valid options.  Note that by default
   the server only accepts connections from localhost."
   ([] (start-server! server-defaults))
   ([server-opts]
    (when (nil? @server)
      (reset! server (http-kit/run-server #'app (merge server-defaults server-opts))))))
+
+(defn server-port
+  "Returns the port the tools server is listening on, or nil if it is not running."
+  []
+  (some-> @server meta :local-port))
 
 (defn stop-server!
   []

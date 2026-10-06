@@ -6,6 +6,7 @@
             [clara.tools.inspect :as inspect]
             [clara.tools.queries :as q]
             [clojure.pprint :as pprint]
+            [clojure.string]
             [clara.tools.impl.file-watcher :as fw]
             [schema.core :as s]))
 
@@ -22,8 +23,7 @@
   [key handler]
   (add-watch sessions
              key
-             (fn [key sessions old new]
-               (println "Watching for " key)
+             (fn [_key _sessions _old new]
                (handler new)))
   cancel-session-watch)
 
@@ -68,7 +68,7 @@
                                              key
                                              (get-queries session)
                                              (get-in sessions [session-id :write-handlers]))
-                           (q/send-failure! channel query {:type :unknown-session} {})))]
+                           (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (query-sessions @sessions)
     (watch-sessions key query-sessions)))
@@ -107,7 +107,7 @@
                                                (clean-and-filter results filter)
                                                (get-in sessions [session-id :write-handlers])))
 
-                           (q/send-failure! channel query {:type :unknown-session} {})))]
+                           (q/send-failure! channel key {:type :unknown-session} {})))]
 
     (query-sessions @sessions)
     (watch-sessions key query-sessions)))
@@ -119,37 +119,43 @@
   (to-transient [listener]
     (to-watch-listener listener)))
 
+(defn- add-facts [facts new-facts]
+  (into facts new-facts))
+
+(defn- remove-facts [facts retracted-facts]
+  (let [[_removed remaining] (mem/remove-first-of-each retracted-facts facts)]
+    (vec remaining)))
+
 (deftype WatchListener [facts]
   l/ITransientEventListener
   (left-activate! [listener node tokens])
-
   (left-retract! [listener node tokens])
-
   (right-activate! [listener node elements])
-
   (right-retract! [listener node elements])
 
-  (insert-facts! [listener new-facts]
-    (swap! facts concat new-facts))
+  (insert-facts! [listener node token new-facts]
+    (swap! facts add-facts new-facts))
+
+  (alpha-activate! [listener node facts])
 
   (insert-facts-logical! [listener node token new-facts]
-    (swap! facts concat new-facts))
+    (swap! facts add-facts new-facts))
 
-  (retract-facts! [listener retracted-facts]
-    (let [[removed updated-facts] (mem/remove-first-of-each retracted-facts @facts)]
-      (reset! facts updated-facts)))
+  (retract-facts! [listener node token retracted-facts]
+    (swap! facts remove-facts retracted-facts))
+
+  (alpha-retract! [listener node facts])
 
   (retract-facts-logical! [listener node token retracted-facts]
-    (let [[removed updated-facts] (mem/remove-first-of-each retracted-facts @facts)]
-      (reset! facts updated-facts)))
+    (swap! facts remove-facts retracted-facts))
 
   (add-accum-reduced! [listener node join-bindings result fact-bindings])
-
+  (remove-accum-reduced! [listener node join-bindings fact-bindings])
   (add-activations! [listener node activations])
-
   (remove-activations! [listener node activations])
-
+  (fire-activation! [listener activation resulting-operations])
   (fire-rules! [listener node])
+  (activation-group-transition! [listener original-group new-group])
 
   (to-persistent! [listener]
     (PersistentWatchListener. @facts)))
@@ -157,13 +163,54 @@
 (defn- to-watch-listener [^PersistentWatchListener listener]
   (WatchListener. (atom (.-facts listener))))
 
+(defn- watch-listener? [listener]
+  (instance? PersistentWatchListener listener))
+
 (defn- add-watch-listener
   "Adds the listener to watch the underlying session changes."
   [session]
-  (let [{:keys [listeners] :as components} (eng/components session)]
-    (eng/assemble (assoc components
-                         :listeners
-                         (conj listeners (PersistentWatchListener. []))))))
+  (eng/with-listener session (PersistentWatchListener. [])))
+
+(defn- pending-changes
+  "Returns the changes in the change log made since rules were last fired."
+  [change-log]
+  (reverse (take-while #(not= :fire-rules (:type %)) (rseq change-log))))
+
+(defn- replay-change
+  "Applies an insert or retract from the change log to a raw session."
+  [session {:keys [type facts]}]
+  (case type
+    :insert (eng/insert session facts)
+    :retract (eng/retract session facts)))
+
+(defn- track-external-changes
+  "Clara does not notify listeners of external insertions and retractions when
+   firing rules with the :cancelling option, so apply them to the watched facts here.
+   Insertions are applied before retractions, matching the engine.
+
+   Replacing the listener drops the session's pending operations, so the changes
+   are replayed on the returned session."
+  [session changes]
+  (let [facts-of (fn [type] (mapcat :facts (filter #(= type (:type %)) changes)))
+        listener (first (eng/find-listeners session watch-listener?))
+        facts (-> (.-facts ^PersistentWatchListener listener)
+                  (add-facts (facts-of :insert))
+                  (remove-facts (facts-of :retract)))]
+    (reduce replay-change
+            (-> session
+                (eng/remove-listeners watch-listener?)
+                (eng/with-listener (PersistentWatchListener. facts)))
+            changes)))
+
+(defn- fire-rules-tracked
+  "Fires rules on a raw session, keeping the watched facts in sync with the
+   given changes made since rules were last fired."
+  [raw-session opts pending]
+  ;; Track external changes before firing, like the engine applies them,
+  ;; so retractions made by rules see them.
+  (eng/fire-rules (cond-> raw-session
+                    (:cancelling opts) (track-external-changes pending))
+                  opts))
 
 (declare watched-session)
 
@@ -187,10 +234,7 @@
   (sources [session] sources)
 
   (facts [session]
-    (if-let [watch-listener (->> (eng/components delegate)
-                                 :listeners
-                                 (filter #(instance? PersistentWatchListener %) )
-                                 (first))]
+    (if-let [watch-listener (first (eng/find-listeners delegate watch-listener?))]
       (.-facts ^PersistentWatchListener watch-listener)
       (throw (IllegalStateException. "Watched session did not have a watch listener."))))
 
@@ -200,20 +244,21 @@
     ;; Apply the change log to the newly loaded session.
     (let [raw-session-with-facts
           (loop [[change & rest] change-log
-                 applied-session (add-watch-listener (session-load-fn))]
+                 applied-session (add-watch-listener (session-load-fn))
+                 pending []]
 
             (if change
 
               (case (:type change)
 
                 :insert
-                (recur rest (eng/insert applied-session (:facts change)))
+                (recur rest (eng/insert applied-session (:facts change)) (conj pending change))
 
                 :retract
-                (recur rest (eng/retract applied-session (:facts change)))
+                (recur rest (eng/retract applied-session (:facts change)) (conj pending change))
 
                 :fire-rules
-                (recur rest (eng/fire-rules applied-session)))
+                (recur rest (fire-rules-tracked applied-session (:opts change) pending) []))
 
               applied-session))]
 
@@ -226,10 +271,9 @@
       session))
 
   (close [session]
-    (let [reload-future (get-in @sessions [session-id :reload-future])]
-      (when reload-future
-        (future-cancel reload-future))
-      (swap! sessions dissoc session-id)))
+    (when-let [source-watcher (get-in @sessions [session-id :source-watcher])]
+      (fw/stop! source-watcher))
+    (swap! sessions dissoc session-id))
 
   eng/ISession
   (insert [session facts]
@@ -240,21 +284,24 @@
      sources
      session-load-fn))
 
-  ;; Retracts a fact.
-  (retract [session fact]
+  ;; Retracts facts.
+  (retract [session facts]
     (watched-session
      session-id
-     (eng/retract delegate fact)
+     (eng/retract delegate facts)
      (conj change-log {:type :retract :facts facts})
      sources
      session-load-fn))
 
   ;; Fires pending rules and returns a new session where they are in a fired state.
   (fire-rules [session]
+    (eng/fire-rules session {}))
+
+  (fire-rules [session opts]
     (watched-session
      session-id
-     (eng/fire-rules delegate)
-     (conj change-log {:type :fire-rules})
+     (fire-rules-tracked delegate opts (pending-changes change-log))
+     (conj change-log {:type :fire-rules :opts opts})
      sources
      session-load-fn))
 
@@ -273,8 +320,8 @@
     (update! session-id new-session)
     new-session))
 
-(defn- mk-source-watch-future
-  "Returns a fture that reloads"
+(defn- mk-source-watcher
+  "Returns a file watcher that reloads the session when its rule sources change."
   [session-id sources]
   (let [source-files (into #{}
                            (for [source sources
@@ -310,13 +357,13 @@
    write-handlers]
   (let [raw-session (session-load-fn)
         session-id  (.toString (java.util.UUID/randomUUID))
-        source-watch-future (mk-source-watch-future session-id sources)
+        source-watcher (mk-source-watcher session-id sources)
         raw-with-listener (add-watch-listener raw-session)
         watched-session (watched-session session-id raw-with-listener [] sources session-load-fn)]
 
     (swap! sessions assoc session-id {:name session-name
                                       :session watched-session
-                                      :reload-future source-watch-future
+                                      :source-watcher source-watcher
                                       :write-handlers write-handlers})
 
     watched-session))
@@ -325,7 +372,7 @@
   "Remove all outstanding watches."
   []
 
-  (doseq [watch-key (keys (.getWatches sessions))]
+  (doseq [watch-key (keys (.getWatches ^clojure.lang.IRef sessions))]
     (remove-watch sessions watch-key))
 
   (doseq [session (vals @sessions)]

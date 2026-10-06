@@ -4,14 +4,15 @@
             [clara.tools.queries :as q]
             [clara.rules.schema :as cs]
             [schema.core :as s]
+            [clara.rules]
             [clara.rules.compiler :as com]
             [clara.tools.impl.watcher :as w]))
 
 
-(def ^:private operators #{:and :or :not})
+(def ^:private operators #{:and :or :not :exists})
 
 (s/defschema node
-  {:type (s/enum :fact :fact-condition :and :or :not :rhs)
+  {:type (s/enum :fact :fact-condition :and :or :not :exists :test :rhs)
    :value s/Any} ; TODO: define node value schema...
   )
 
@@ -139,6 +140,34 @@
   [condition production-symbol condition-to-id]
   (bool-condition-graph condition production-symbol condition-to-id))
 
+(defmethod condition-graph :exists
+  [condition production-symbol condition-to-id]
+  (bool-condition-graph condition production-symbol condition-to-id))
+
+(defmethod condition-graph :test
+  [condition production-symbol condition-to-id]
+  {:nodes {(condition-to-id condition)
+           {:type :test
+            :value condition
+            :symbol production-symbol}}
+   :edges {}})
+
+
+(def ^:private insert-fns
+  #{#'clara.rules/insert! #'clara.rules/insert-unconditional!})
+
+(defn- resolve-var
+  "Resolves the symbol to a var in the production's namespace, if possible.
+   Clara stores right-hand sides unqualified."
+  [production sym]
+  (when (symbol? sym)
+    (let [ns (some-> (:ns-name production) find-ns)
+          resolved (cond
+                     ns (ns-resolve ns sym)
+                     ;; Productions built as data may lack a namespace but use qualified symbols.
+                     (namespace sym) (resolve sym))]
+      (when (var? resolved)
+        resolved))))
 
 (defn- get-insertions
   "Returns the insertions done by a production."
@@ -148,13 +177,17 @@
     (into
      #{}
      (for [expression (tree-seq seq? identity rhs)
-           :when (and (list? expression)
-                      (= 'clara.rules/insert! (first expression))) ; Find insert! calls
-           [create-fact-fn create-fact-args] (rest expression)
-           :when (re-matches #"->.*" (name create-fact-fn))] ; Find record constructors.
+           :when (and (seq? expression)
+                      (insert-fns (resolve-var production (first expression)))) ; Find insert! calls
+           create-fact-expr (rest expression)
+           ;; Only constructor calls like (->Fact ...) reveal the inserted type.
+           :when (seq? create-fact-expr)
+           :let [create-fact-fn (some-> (resolve-var production (first create-fact-expr)) symbol)]
+           :when (and create-fact-fn
+                      (re-matches #"->.*" (name create-fact-fn)))] ; Find record constructors.
 
        ;; Get the class qualified class name as a string.
-       (str (string/replace (str (namespace create-fact-fn))  #"-" "_")
+       (str (munge (namespace create-fact-fn))
             "."
             (subs (name create-fact-fn) 2)))) ; Return the record type.
     #{}))

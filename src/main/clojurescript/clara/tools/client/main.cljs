@@ -1,16 +1,13 @@
 (ns clara.tools.client.main
   "Main entrypoint for the Clara Tools application."
-  (:require [goog.events :as events]
-            [reagent.core :as reagent :refer [atom]]
-            [cljsjs.react-bootstrap]
+  (:refer-clojure :exclude [atom])
+  (:require [reagent.core :as reagent :refer [atom]]
+            [reagent.dom.client :as rdc]
             [clara.tools.client.bootstrap :as b]
             [clara.tools.client.sessions.query-view :as qv]
             [clara.tools.client.sessions.fact-view :as fv]
             [clara.tools.client.sessions.logic-view :as lv]
-            [clara.tools.client.channel :as s]
-            [secretary.core :as secretary :refer-macros [defroute]])
-  (:import goog.History
-           goog.history.EventType))
+            [clara.tools.client.channel :as s]))
 
 (defonce app-state (atom {:active-tab :queries
                           ;; Map of session id to information.
@@ -39,10 +36,11 @@
                 (get @session-map @active-session)
                 "No sessions selected.")]
 
-    (into [b/nav-dropdown {:eventKey :session-select :title title :id "select-sessions"}]
+    (into [b/nav-dropdown {:title title :id "select-sessions" :align "end"}]
           (for [[session-id session-name] @session-map]
-            [b/menu-item [:div {:onClick (fn [] (reset! active-session session-id))}
-                          session-name]]))))
+            ^{:key session-id}
+            [b/menu-item {:onClick (fn [] (reset! active-session session-id))}
+             session-name]))))
 
 (defn session-tab
   [session-view-fn]
@@ -52,21 +50,18 @@
 
 
 (defn app []
-  (s/run-query! :get-sessions
-               [:sessions]
-               (fn [results]
-                 (reset! session-map results)))
   [:div {:style {:min-height "100%" :height "100%"}}
 
-   [b/navbar
+   [b/navbar {:bg "light" :className "px-3 mb-2"}
 
     (into
-      [b/nav {:bsStyle "tabs" :activeKey @active-tab }]
+      [b/nav {:variant "tabs" :activeKey (name @active-tab)}]
       (for [tab-key [:queries :facts :logic]
             :let [{:keys [key title]} (tab-key tabs)]]
-        [b/nav-item {:eventKey key :title title :href (str "#/" (name key))} title]))
+        ^{:key key}
+        [b/nav-item {:eventKey (name key) :title title :href (str "#/" (name key))} title]))
 
-   [b/nav {:pullRight true} [session-selector]]]
+    [b/nav {:className "ms-auto"} [session-selector]]]
    (when (and @active-tab @active-session)
      (let [tab-state {:active-session @active-session}
            tab-cursor (reagent/cursor app-state [:session-tabs @active-session @active-tab])]
@@ -79,23 +74,25 @@
          :logic [lv/logic-view tab-cursor]
          [:p "Select a tab!"])))])
 
-(reagent/render [app]  (.getElementById js/document "app"))
+(def ^:private routes
+  {"#/facts" :facts
+   "#/queries" :queries
+   "#/logic" :logic})
 
-(defroute "/facts" {:as params}
-  (reset! active-tab :facts))
+(defn- route! []
+  (reset! active-tab (get routes (.-hash js/location) :queries)))
 
-(defroute "/queries" {:as params}
-  (reset! active-tab :queries))
+(defonce ^:private root (cljs.core/atom nil))
 
-(defroute "/logic" {:as params}
-  (reset! active-tab :logic))
+(defn ^:export mount! []
+  (rdc/render @root [app]))
 
-(defroute "/" {:as params}
-  (reset! active-tab :queries))
-
-
-
-(let [h (History.)]
-  (goog.events/listen h "navigate" #(secretary/dispatch! (.-token %)))
-  (doto h
-    (.setEnabled true)))
+(defn ^:export init []
+  (reset! root (rdc/create-root (.getElementById js/document "app")))
+  (.addEventListener js/window "hashchange" route!)
+  (route!)
+  (s/run-query! :get-sessions
+                [:sessions]
+                (fn [results]
+                  (reset! session-map results)))
+  (mount!))

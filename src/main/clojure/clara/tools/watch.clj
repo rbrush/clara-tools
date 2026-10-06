@@ -42,8 +42,11 @@
   ([]
    (browse! s/server-defaults))
   ([server-opts]
-   (s/start-server! server-opts)
-   (b/browse-url (str "http:/localhost:"  (:port server-opts)))))
+   (let [server-opts (merge s/server-defaults server-opts)]
+     (s/start-server! server-opts)
+     ;; Use the port of the running server, which may have been started with other options.
+     (b/browse-url (str "http://localhost:" (or (s/server-port)
+                                                (:port server-opts)))))))
 
 (defn shutdown!
   "Shuts down all watches and stops the server."

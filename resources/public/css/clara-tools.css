@@ -2,20 +2,35 @@ html, body { margin:0; padding:0; overflow:hidden; height:100%; }
 
 #app { height:100%; }
 
-.node rect {
+.node rect,
+.node ellipse,
+.node circle {
     stroke: #333;
     stroke-width: 1.5px;
     fill: #fff;
+}
+.node:hover rect {
+    fill: #f1f3f5;
 }
 .edgeLabel rect {
     fill: #fff;
 }
-.edgePath {
+.edgePath path.path {
     stroke: #333;
     stroke-width: 1.5px;
     fill: none;
 }
+.edgePath marker path {
+    fill: #333;
+}
 
-.panel-body.record-table-content {
+.card-body.record-table-content {
     padding: 0;
+}
+
+svg[data-zoom] {
+    cursor: grab;
+}
+svg[data-zoom]:active {
+    cursor: grabbing;
 }

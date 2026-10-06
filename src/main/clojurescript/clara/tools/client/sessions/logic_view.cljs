@@ -1,5 +1,6 @@
 (ns clara.tools.client.sessions.logic-view
   "View to explore Clara logic."
+  (:refer-clojure :exclude [atom])
   (:require [reagent.core :as reagent :refer [atom]]
             [clojure.string :as str]
             [clara.tools.client.bootstrap :as bs]
@@ -43,6 +44,14 @@
   [node]
   {:label "NOT"})
 
+(defmethod display-node :exists
+  [node]
+  {:label "EXISTS"})
+
+(defmethod display-node :test
+  [node]
+  {:label (str "TEST " (pr-str (get-in node [:value :constraints])))})
+
 (defmethod display-node :default
   [node]
   {:label (str (:type node))})
@@ -65,10 +74,7 @@
   (deref logic-graph)
   (deref focused-facts)
   [:div
-   [:div { ; :style {:height "100%" :width "100%"}
-          :react-key "d3-node" ;; ensure React knows this is non-reusable
-          :ref "d3-node"       ;; label it so we can retrieve it via get-node
-          :id "d3-node"}
+   [:div {:id "d3-node"}
     [:svg {:width "100%" :height 800
            :style {:outline "thin solid #C0C0C0"}}
 
@@ -88,7 +94,7 @@
                       (dagre/render! dagre-graph))]
 
     (reagent/create-class
-     {:render render-logic-graph-setup
+     {:reagent-render render-logic-graph-setup
       :component-did-mount do-render!
       :component-did-update do-render!})))
 
@@ -96,57 +102,51 @@
 ;; The context menu for the selected node...
 (def context-details (atom nil))
 
-(defn modal
-  "Returns a component representing a model."
-  [{:keys [title content footer close-fn]}]
-  [:div
-   [:div.modal-backdrop.fade.in]
-   [:div.modal.fade.in {:tabIndex "-1" :role "dialog" :style {:display "block"} :on-click close-fn}
-    [:div.modal-dialog
-     [:div.modal-content
-      [:div.modal-header
-       [:h4.modal-title title]]
-      content
-      [:div.modal-footer
-       footer
-       [:div.btn.btn-default {:type "button"
-                              :on-click close-fn}
-        "Close"]]]]]])
-
-
 (defn focused-facts-list []
   (let [facts @focused-facts]
-    [:div.panel.panel-default
-     [:div.panel-heading "Focused Fact Types"]
+    [:div.card
+     [:div.card-header "Focused Fact Types"]
      [:ul.list-group
       (if (empty? facts)
         [:li.list-group-item "<none>"]
         (for [{:keys [name enabled] :as fact} facts]
+          ^{:key name}
           [:li.list-group-item
            (last (str/split name "." ))
-           [:span.glyphicon.glyphicon-remove.pull-right
-            {:on-click #(reset! focused-facts (remove (fn [old-fact] (= fact old-fact)) facts) )}]]))]]))
+           [:span.float-end
+            {:role "button"
+             :title "Remove"
+             :on-click #(reset! focused-facts (remove (fn [old-fact] (= fact old-fact)) facts) )}
+            "\u00d7"]]))]]))
 
 
 (defmulti context-menu-content :type)
 
 (defmethod context-menu-content :fact [node]
-  [:div.btn-group.btn-group-vertical
+  [:div.btn-group-vertical
 
-   [:button.btn.btn-default
+   [:button.btn.btn-light.border
     {:type "button"
      :on-click #(swap! focused-facts conj {:name (:value node) :enabled true})}
     "Add to focus"]])
 
+;; Only fact nodes have a context menu.
+(defmethod context-menu-content :default [_node]
+  nil)
+
 (defn context-menu []
-  (when-let [{:keys [x y node-key] :as details} @context-details]
+  (when-let [content (some->> @context-details
+                              :node-key
+                              (get (:nodes @logic-graph))
+                              (context-menu-content))]
+    (let [{:keys [x y]} @context-details]
     [:div {:style {:position "absolute"
                    :left (str (- x 10) "px")
                    :top (str (- y 5) "px")
                    :display "inline-block"
                    :z-index 1000}
            :on-mouse-leave #(reset! context-details nil)}
-     (context-menu-content (get-in @logic-graph [:nodes node-key]))]))
+     content])))
 
 (defn logicview-app []
   [:div

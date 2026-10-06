@@ -65,9 +65,9 @@
                                     :on-failure on-failure})
    (send-message! {:type :start-query :key key :request query})))
 
-(defn cancel-query! [key]
+(defn cancel-query!
   "Cancels the query with the given key."
-
+  [key]
   (swap! query-handlers dissoc key)
   (send-message! {:type :end-query :key key}))
 

@@ -4,7 +4,8 @@
             [clara.tools.watch :as wa]
             [clara.tools.impl.watcher :as wr]
             [clara.tools.examples.shopping :as shop]
-            [clara.tools.examples.shopping.records :as rec]))
+            [clara.tools.examples.shopping.records :as rec]
+            [clara.tools.examples.commands :as cmd]))
 
 (deftest test-empty-watch
   (with-open [session (wa/mk-watched-session "Test session" 'clara.tools.examples.shopping :cache false)]
@@ -13,16 +14,49 @@
 
     (is (empty? (wr/facts session)))
 
-    (let [test-facts [(rec/->Purchase 100 :gizmo)
+    ;; Insertions and retractions are pending until rules are fired,
+    ;; so the watcher only sees them afterwards.
+    (let [purchases (fn [session]
+                      (filterv #(instance? clara.tools.examples.shopping.records.Purchase %)
+                               (wr/facts session)))
+          test-facts [(rec/->Purchase 100 :gizmo)
                       (rec/->Purchase 150 :widget)]
-          session-with-facts (insert-all session
-                                         test-facts)
-          session-with-retractions (apply retract session-with-facts test-facts)]
+          session-with-facts (-> session
+                                 (insert-all test-facts)
+                                 (fire-rules))
+          session-with-retractions (-> (apply retract session-with-facts test-facts)
+                                       (fire-rules))]
+
+      (is (empty? (purchases (insert-all session test-facts))))
 
       (is (= test-facts
-             (wr/facts session-with-facts)))
+             (purchases session-with-facts)))
 
-      (is (empty? (wr/facts session-with-retractions))))))
+      ;; Facts derived by rules are tracked too.
+      (is (some #(instance? clara.tools.examples.shopping.records.Total %)
+                (wr/facts session-with-facts)))
+
+      (is (empty? (purchases session-with-retractions))))))
+
+(deftest test-fire-rules-with-opts
+  (with-open [session (wa/mk-watched-session "Test session" 'clara.tools.examples.shopping :cache false)]
+    (let [fired (-> session
+                    (insert (rec/->Purchase 100 :gizmo))
+                    (fire-rules {:cancelling true}))]
+      (is (= [(rec/->Purchase 100 :gizmo)]
+             (filterv #(instance? clara.tools.examples.shopping.records.Purchase %)
+                      (wr/facts fired))))
+      ;; Fire-rules options are kept in the change log so reloads replay them.
+      (is (= {:type :fire-rules :opts {:cancelling true}}
+             (last (.-change-log ^clara.tools.impl.watcher.WatchedSession fired)))))))
+
+(defn- wait-for
+  "Polls until pred returns true or the timeout elapses, then returns (result-fn)."
+  [pred result-fn]
+  (let [deadline (+ (System/currentTimeMillis) 15000)]
+    (while (and (not (pred)) (< (System/currentTimeMillis) deadline))
+      (Thread/sleep 50))
+    (result-fn)))
 
 (def initial-test-content
   "(ns clara.tools.test.reload
@@ -64,13 +98,21 @@
       (is (= ["Initial"]
              (wr/facts session)))
 
-      ;; Delay to ensure listener is watching file. TODO: find a way to remove this need.
-      (Thread/sleep 2000)
-
-      ;; We should see the insertion from the reloaded file.
+      ;; We should see the insertion from the reloaded file. The file is watched
+      ;; once the session is created, but the reload happens asynchronously.
       (spit test-file reload-test-content)
 
-      (Thread/sleep 5000)
-
       (is (= ["Reload"]
-             (wr/facts session))))))
+             (wait-for #(= ["Reload"] (wr/facts session))
+                       #(wr/facts session)))))))
+
+(deftest test-cancelling-with-rule-retractions
+  ;; Facts inserted externally and retracted by a rule while firing with
+  ;; :cancelling must not be left in the watched facts.
+  (doseq [opts [{} {:cancelling true}]]
+    (with-open [session (wa/mk-watched-session "Test session" 'clara.tools.examples.commands :cache false)]
+      (let [fired (-> session
+                      (insert (cmd/->Command :a))
+                      (fire-rules opts))]
+        (is (= [(cmd/->Done :a)] (wr/facts fired))
+            (str "fire-rules with " opts))))))

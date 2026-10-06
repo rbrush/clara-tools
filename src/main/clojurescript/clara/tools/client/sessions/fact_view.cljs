@@ -1,6 +1,8 @@
 (ns clara.tools.client.sessions.fact-view
   "Tab to explore Clara facts."
+  (:refer-clojure :exclude [atom])
   (:require [reagent.core :as reagent :refer [atom]]
+            [reagent.ratom :as ratom]
             [clara.tools.client.bootstrap :as bs]
             [clara.tools.client.record-table :as rt]
             [clara.tools.client.channel :as chan]
@@ -53,9 +55,9 @@
 (def context-details (atom nil))
 
 (defn context-menu-content [node-key node fact-ids-ref]
-  [:div.btn-group.btn-group-vertical
+  [:div.btn-group-vertical
 
-   [:button.btn.btn-default
+   [:button.btn.btn-light.border
     {:type "button"
      :on-click #(js/alert (str node))}
     "Include!"]])
@@ -72,13 +74,13 @@
 
        ;; Currently we only display a menu on fact nodes.
        (when (= :fact (:type node))
-         [:div.btn-group.btn-group-vertical
+         [:div.btn-group-vertical
           (if (some #{node-key} @fact-ids)
-            [:button.btn.btn-default
+            [:button.btn.btn-light.border
              {:type "button"
               :on-click #(swap! fact-ids (fn [ids] (remove #{node-key} ids)))}
              "Remove Supporting Explanation"]
-            [:button.btn.btn-default
+            [:button.btn.btn-light.border
              {:type "button"
               :on-click #(swap! fact-ids conj node-key)}
              "Include Supporting Explanation"])]))]))
@@ -91,8 +93,6 @@
     [:div "Fact was inserted directly so no explanation available."]
 
     [:div {:style {:height "85%" :width "100%"}
-           :react-key "d3-node" ;; ensure React knows this is non-reusable
-           :ref "d3-node"       ;; label it so we can retrieve it via get-node
            :id "d3-node"}
      [:svg {:width "100%" :height "100%"
             :style {:outline "thin solid #C0C0C0"}}
@@ -134,13 +134,13 @@
                        (reset! fact-types results)))
 
     ;; When the selected fact ids change, get the new explanation.
-    (reagent.ratom/run!
+    (ratom/run!
      (chan/run-query! [:explain-facts (:active-session @view-state)]
                       [:explain-facts (:active-session @view-state) @fact-ids]
                       (fn [results] (reset! explanation-graph results))))
 
     ;; When the active type changes, get the list of facts for it.
-    (reagent.ratom/run!
+    (ratom/run!
      (when @active-type
        (chan/run-query! [:list-facts-by-type (:active-session @view-state)]
                         [:list-facts-by-type
@@ -159,13 +159,11 @@
         [:div.col-lg-9.col-md-9.col-sm-9 {:style {:height "90%"}}
 
          (when (seq @fact-ids)
-           [:div.panel.panel-default {:style {:height "60%"}}
-            [:div.panel-heading.clearfix
-             [:h4.panel-title.pull-left "Fact Explanation"]
-             [:div.input-group.pull-right
-              {:style {:width "80px"
-                       :float "right"}}
-              [:button.btn.btn-sm.btn-default {:onClick (fn [] (reset! fact-ids #{}))} "Clear" ]]]
+           [:div.card {:style {:height "60%"}}
+            [:div.card-header.d-flex.align-items-center
+             [:h5.card-title.mb-0 "Fact Explanation"]
+             [:div.ms-auto
+              [:button.btn.btn-sm.btn-outline-secondary {:onClick (fn [] (reset! fact-ids #{}))} "Clear" ]]]
 
 
             [render-explanation-graph]])

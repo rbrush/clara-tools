@@ -1,0 +1,15 @@
+{
+  "name": "clara-tools",
+  "private": true,
+  "devDependencies": {
+    "shadow-cljs": "3.5.4"
+  },
+  "dependencies": {
+    "bootstrap": "5.3.8",
+    "d3": "7.9.0",
+    "dagre-d3-es": "7.0.14",
+    "react": "18.3.1",
+    "react-bootstrap": "2.10.10",
+    "react-dom": "18.3.1"
+  }
+}
